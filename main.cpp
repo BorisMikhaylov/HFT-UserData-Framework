@@ -5,6 +5,7 @@
 #include <deque>
 #include <algorithm>
 #include <stdarg.h>
+#include <cstring>
 #include <chrono>
 #include <atomic>
 #include <utility>
