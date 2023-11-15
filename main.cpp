@@ -3,10 +3,11 @@
 #include <string>
 #include <memory>
 #include <deque>
+#include <algorithm>
+#include <stdarg.h>
 #include <chrono>
 #include <atomic>
 #include <utility>
-#include <stdio.h>
 
 namespace bparser {
 
@@ -96,6 +97,7 @@ namespace bparser {
 
         logger(char *file, int line, char *begin, char *current, char *anEnd);
 
+
         void operator()(const char *format, ...) {
             if (!enabled) return;
             std::string str(begin, end);
@@ -132,7 +134,7 @@ namespace bparser {
             end = &*str.end();
         }
 
-        void log(const std::string& message) {
+        void log(const std::string &message) {
             std::cout << message << ": " << *current;
         }
 
