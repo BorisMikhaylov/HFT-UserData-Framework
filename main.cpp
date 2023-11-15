@@ -11,29 +11,29 @@
 namespace bparser {
 
     struct state;
-    struct objectCallback;
+    struct ObjectCallback;
 
-    struct arrayCallback {
+    struct ArrayCallback {
 
-        virtual arrayCallback *willParseArray() = 0;
+        virtual ArrayCallback *willParseArray() = 0;
 
-        virtual objectCallback *willParseObject() = 0;
+        virtual ObjectCallback *willParseObject() = 0;
 
         virtual void nextValue(char *begin, char *end) = 0;
 
         virtual void arrayFinished() = 0;
     };
 
-    struct objectCallback {
+    struct ObjectCallback {
         state *idMap;
 
-        explicit objectCallback(state *idMap) : idMap(idMap) {}
+        explicit ObjectCallback(state *idMap) : idMap(idMap) {}
 
         virtual void valueForField(int field_id, char *begin, char *end) = 0;
 
-        virtual objectCallback *willParseObject(int field_id) = 0;
+        virtual ObjectCallback *willParseObject(int field_id) = 0;
 
-        virtual arrayCallback *willParseArray(int field_id) = 0;
+        virtual ArrayCallback *willParseArray(int field_id) = 0;
 
         virtual void objectFinished() = 0;
     };
@@ -193,7 +193,7 @@ namespace bparser {
             }
         }
 
-        [[maybe_unused]] int parseArray(arrayCallback *arr) {
+        [[maybe_unused]] int parseArray(ArrayCallback *arr) {
             if (skipSpaces() == -2) {
                 INLOG("Wrong spaces");
                 return -2;
@@ -238,7 +238,7 @@ namespace bparser {
             return 0;
         }
 
-        int parseObject(objectCallback *obj) {
+        int parseObject(ObjectCallback *obj) {
             if (skipSpaces() == -2) {
                 INLOG("Wrong spaces");
                 return -2;
@@ -389,12 +389,12 @@ static state *dataObjectIdMap = buildStateMachine(dataObjectId, 6);
 
 JsonOut jsonOutObject;
 
-struct dataObjectCallback : objectCallback {
+struct DataObjectCallback : ObjectCallback {
     easywsclient::WebSocket *ws;
     JsonOut &out;
 
-    explicit dataObjectCallback(easywsclient::WebSocket *ws, JsonOut &out) : ws(ws), out(out),
-                                                                             objectCallback(dataObjectIdMap) {}
+    explicit DataObjectCallback(easywsclient::WebSocket *ws, JsonOut &out) : ws(ws), out(out),
+                                                                             ObjectCallback(dataObjectIdMap) {}
 
     void valueForField(int fieldId, char *begin, char *end) override {
         if (fieldId < 0) return;
@@ -405,11 +405,11 @@ struct dataObjectCallback : objectCallback {
         out.addField(outputObjectId[fieldId], begin, end);
     }
 
-    objectCallback *willParseObject(int field_id) override {
+    ObjectCallback *willParseObject(int field_id) override {
         return nullptr;
     }
 
-    arrayCallback *willParseArray(int field_id) override {
+    ArrayCallback *willParseArray(int field_id) override {
         return nullptr;
     }
 
@@ -424,16 +424,16 @@ struct dataObjectCallback : objectCallback {
 };
 
 
-struct data_array_callback : arrayCallback {
-    dataObjectCallback dataObjectCallback;
+struct DataArrayCallback : ArrayCallback {
+    DataObjectCallback dataObjectCallback;
 
-    explicit data_array_callback(easywsclient::WebSocket *ws, JsonOut &out) : dataObjectCallback(ws, out) {}
+    explicit DataArrayCallback(easywsclient::WebSocket *ws, JsonOut &out) : dataObjectCallback(ws, out) {}
 
-    arrayCallback *willParseArray() override {
+    ArrayCallback *willParseArray() override {
         return nullptr;
     }
 
-    objectCallback *willParseObject() override {
+    ObjectCallback *willParseObject() override {
         return &dataObjectCallback;
     }
 
@@ -449,20 +449,20 @@ struct data_array_callback : arrayCallback {
 static char *quoteObjectId[] = {"data"};
 static state *quoteObjectIdMap = buildStateMachine(quoteObjectId, 1);
 
-struct quoteObjectCallback : objectCallback {
-    data_array_callback dataArrayCallback;
+struct QuoteObjectCallback : ObjectCallback {
+    DataArrayCallback dataArrayCallback;
 
-    explicit quoteObjectCallback(easywsclient::WebSocket *ws, JsonOut &out) : dataArrayCallback(ws, out),
-                                                                              objectCallback(quoteObjectIdMap) {}
+    explicit QuoteObjectCallback(easywsclient::WebSocket *ws, JsonOut &out) : dataArrayCallback(ws, out),
+                                                                              ObjectCallback(quoteObjectIdMap) {}
 
     void valueForField(int field_id, char *begin, char *end) override {
     }
 
-    objectCallback *willParseObject(int fieldId) override {
+    ObjectCallback *willParseObject(int fieldId) override {
         return nullptr;
     }
 
-    arrayCallback *willParseArray(int field_id) override {
+    ArrayCallback *willParseArray(int field_id) override {
         return field_id == 0 ? &dataArrayCallback : nullptr;
     }
 
@@ -473,7 +473,7 @@ struct quoteObjectCallback : objectCallback {
 
 void parseQuote(easywsclient::WebSocket *ws, std::string message) {
     jsonOutObject.reset();
-    quoteObjectCallback quoteObjectCallback(ws, jsonOutObject);
+    QuoteObjectCallback quoteObjectCallback(ws, jsonOutObject);
     input in(message);
     in.parseObject(&quoteObjectCallback);
 }
