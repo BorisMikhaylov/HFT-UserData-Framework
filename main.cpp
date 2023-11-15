@@ -421,7 +421,7 @@ struct DataObjectCallback : ObjectCallback {
         out.addField("\"sign\"", "\"SkAjqP4LC9UexmrX\"");
         out.finishObject();
         ws->send(out.getStr());
-        std::cout << "Sending: " << out.getStr() << std::endl << std::endl;
+        //std::cout << "Sending: " << out.getStr() << std::endl << std::endl;
         out.reset();
     }
 };
@@ -489,7 +489,7 @@ std::string readMessage(easywsclient::WebSocket *ws) {
             result = message;
         });
     }
-    std::cout << "Read message: " << result << std::endl;
+    //std::cout << "Read message: " << result << std::endl;
     return result;
 }
 
