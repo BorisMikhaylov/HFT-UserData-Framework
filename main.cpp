@@ -2,13 +2,15 @@
 #include <iostream>
 #include <string>
 #include <memory>
-#include <deque>
 #include <algorithm>
-#include <stdarg.h>
+#include <cstdarg>
 #include <cstring>
 #include <chrono>
-#include <atomic>
 #include <utility>
+
+auto startTimestamp = std::chrono::high_resolution_clock::now();
+auto endTimestamp = std::chrono::high_resolution_clock::now() - startTimestamp;
+
 
 namespace bparser {
 
@@ -122,7 +124,9 @@ namespace bparser {
                                                                                     begin(begin), current(current),
                                                                                     end(anEnd) {}
 
+
 #define INLOG logger(__FILE__, __LINE__, begin, current, end)
+
 
     struct input {
         char *begin;
@@ -345,6 +349,12 @@ struct JsonOut {
 
 using namespace bparser;
 
+int getTimestamp() {
+    const auto p1 = std::chrono::system_clock::now();
+    return std::chrono::duration_cast<std::chrono::seconds>(
+            p1.time_since_epoch()).count();
+}
+
 void checkSimpleValue(std::string str, int result, int pos) {
     input in(str);
     int res = in.parseSimpleValue();
@@ -421,7 +431,10 @@ struct DataObjectCallback : ObjectCallback {
         out.addField("\"sign\"", "\"SkAjqP4LC9UexmrX\"");
         out.finishObject();
         ws->send(out.getStr());
-        //std::cout << "Sending: " << out.getStr() << std::endl << std::endl;
+        endTimestamp = std::chrono::high_resolution_clock::now() - startTimestamp;
+        std::cout << "Sending: " << out.getStr() << std::endl;
+        std::cout << "Time: " << std::chrono::duration_cast<std::chrono::microseconds>(
+                endTimestamp).count() << std::endl << std::endl;
         out.reset();
     }
 };
@@ -487,13 +500,14 @@ std::string readMessage(easywsclient::WebSocket *ws) {
         ws->poll();
         ws->dispatch([&result](const std::string &message) {
             result = message;
+            startTimestamp = std::chrono::high_resolution_clock::now();
         });
     }
-    //std::cout << "Read message: " << result << std::endl;
+    std::cout << "Read message: " << result << std::endl;
     return result;
 }
 
-int main() {
+int main1() {
     auto ws = easywsclient::WebSocket::from_url("ws://127.0.0.1:9999/?url=wss://ws.okx.com:8443/ws/v5/private");
 
     const auto p1 = std::chrono::system_clock::now();
