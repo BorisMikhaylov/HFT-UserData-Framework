@@ -77,6 +77,8 @@ namespace bhft {
         bool isClosed(){
             return socket.isClosed();
         }
+
+        status getMessage(char* dst);
     };
 
 } // bhft

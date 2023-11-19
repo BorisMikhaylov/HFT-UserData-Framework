@@ -5,7 +5,25 @@
 #include "fastsocket.h"
 
 namespace bhft {
-    Socket::Socket(const std::string &hostname, int port) : socket(INVALID_SOCKET), begin(readBuffer), end(readBuffer), socketClosed(false) {
+    struct wsheader_type {
+        unsigned header_size;
+        bool fin;
+        bool mask;
+        enum opcode_type {
+            CONTINUATION = 0x0,
+            TEXT_FRAME = 0x1,
+            BINARY_FRAME = 0x2,
+            CLOSE = 8,
+            PING = 9,
+            PONG = 0xa,
+        } opcode;
+        int N0;
+        uint64_t N;
+        uint8_t masking_key[4];
+    };
+
+    Socket::Socket(const std::string &hostname, int port) : socket(INVALID_SOCKET), begin(readBuffer), end(readBuffer),
+                                                            socketClosed(false) {
         struct addrinfo hints;
         struct addrinfo *result;
         struct addrinfo *p;
@@ -73,15 +91,15 @@ namespace bhft {
 
     WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool mask)
             : socket(hostname, port) {
-        if(isClosed()){
+        if (isClosed()) {
             return;
         }
         char buffer[4096];
         char *format = "GET /%s HTTP/1.1\r\nHost: %s:%i\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
         sprintf(buffer, format, path.c_str(), hostname.c_str(), port);
         socket.write(buffer, strlen(buffer));
-        while (strlen(buffer) > 0){
-            if (readLine(buffer) == closed){
+        while (strlen(buffer) > 0) {
+            if (readLine(buffer) == closed) {
                 return;
             }
             std::cout << buffer << std::endl;
@@ -93,20 +111,111 @@ namespace bhft {
     }
 
     status WebSocket::readLine(char *buffer) {
-        if (socket.read(buffer, 2) == closed){
+        if (socket.read(buffer, 2) == closed) {
             return closed;
         }
-        char* ptr = buffer;
-        while (ptr[0] != '\r' || ptr[1] != '\n'){
-            if (socket.read(ptr++ + 2, 1) == closed){
+        char *ptr = buffer;
+        while (ptr[0] != '\r' || ptr[1] != '\n') {
+            if (socket.read(ptr++ + 2, 1) == closed) {
                 return closed;
             }
         }
         *ptr = 0;
         return success;
     }
+
+    status WebSocket::getMessage(char *dst) {
+        wsheader_type ws;
+        do {
+            char header[16];
+            socket.read(header, 2);
+            const uint8_t *data = (uint8_t *) header;
+            ws.fin = (data[0] & 0x80) == 0x80;
+            ws.opcode = (wsheader_type::opcode_type) (data[0] & 0x0f);
+            ws.mask = (data[1] & 0x80) == 0x80;
+            ws.N0 = (data[1] & 0x7f);
+            ws.header_size = 2 + (ws.N0 == 126 ? 2 : 0) + (ws.N0 == 127 ? 8 : 0) + (ws.mask ? 4 : 0);
+            socket.read(header + 2, ws.header_size - 2);
+            int i = 0;
+            if (ws.N0 < 126) {
+                ws.N = ws.N0;
+                i = 2;
+            } else if (ws.N0 == 126) {
+                ws.N = 0;
+                ws.N |= ((uint64_t) data[2]) << 8;
+                ws.N |= ((uint64_t) data[3]) << 0;
+                i = 4;
+            } else if (ws.N0 == 127) {
+                ws.N = 0;
+                ws.N |= ((uint64_t) data[2]) << 56;
+                ws.N |= ((uint64_t) data[3]) << 48;
+                ws.N |= ((uint64_t) data[4]) << 40;
+                ws.N |= ((uint64_t) data[5]) << 32;
+                ws.N |= ((uint64_t) data[6]) << 24;
+                ws.N |= ((uint64_t) data[7]) << 16;
+                ws.N |= ((uint64_t) data[8]) << 8;
+                ws.N |= ((uint64_t) data[9]) << 0;
+                i = 10;
+                if (ws.N & 0x8000000000000000ull) {
+                    // https://tools.ietf.org/html/rfc6455 writes the "the most
+                    // significant bit MUST be 0."
+                    //
+                    // We can't drop the frame, because (1) we don't we don't
+                    // know how much data to skip over to find the next header,
+                    // and (2) this would be an impractically long length, even
+                    // if it were valid. So just close() and return immediately
+                    // for now.
+                    socket.socketClosed = true;
+                    return closed;
+                }
+            }
+            if (ws.mask) {
+                ws.masking_key[0] = ((uint8_t) data[i + 0]) << 0;
+                ws.masking_key[1] = ((uint8_t) data[i + 1]) << 0;
+                ws.masking_key[2] = ((uint8_t) data[i + 2]) << 0;
+                ws.masking_key[3] = ((uint8_t) data[i + 3]) << 0;
+            } else {
+                ws.masking_key[0] = 0;
+                ws.masking_key[1] = 0;
+                ws.masking_key[2] = 0;
+                ws.masking_key[3] = 0;
+            }
+            // We got a whole message, now do something with it:
+            if (
+                    ws.opcode == wsheader_type::TEXT_FRAME
+                    || ws.opcode == wsheader_type::BINARY_FRAME
+                    || ws.opcode == wsheader_type::CONTINUATION
+                    ) {
+                socket.read(dst, ws.N);
+                if (ws.mask) {
+                    for (size_t i = 0; i != ws.N; ++i) {
+                        dst[i] ^= ws.masking_key[i & 0x3];
+                    }
+                }
+                dst += ws.N;
+            } else if (ws.opcode == wsheader_type::PING) {
+//            if (ws.mask) {
+//                for (size_t i = 0; i != ws.N; ++i) {
+//                    rxbuf[i + ws.header_size] ^= ws.masking_key[i & 0x3];
+//                }
+//            }
+//            std::string data(rxbuf.begin() + ws.header_size, rxbuf.begin() + ws.header_size + (size_t) ws.N);
+//            sendData(wsheader_type::PONG, data.size(), data.begin(), data.end());
+                socket.socketClosed = true;
+                return closed;
+                // TODO implement
+            } else if (ws.opcode == wsheader_type::PONG) {
+                socket.read(dst, ws.N);
+                continue;
+            } else {
+                socket.socketClosed = true;
+                return closed;
+            }
+        } while (!ws.fin);
+    }
+
 } // bhft
 
-int main(){
+int main() {
     bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
 }
