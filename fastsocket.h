@@ -46,6 +46,23 @@ namespace bhft {
         closed
     };
 
+    struct wsheader_type {
+        unsigned header_size;
+        bool fin;
+        bool mask;
+        enum opcode_type {
+            CONTINUATION = 0x0,
+            TEXT_FRAME = 0x1,
+            BINARY_FRAME = 0x2,
+            CLOSE = 8,
+            PING = 9,
+            PONG = 0xa,
+        } opcode;
+        int N0;
+        uint64_t N;
+        uint8_t masking_key[4];
+    };
+
     struct Socket {
         char readBuffer[1024];
         char *begin;
@@ -61,24 +78,40 @@ namespace bhft {
 
         Socket(const std::string &hostname, int port);
 
-        bool isClosed(){
+        bool isClosed() {
             return socketClosed;
         }
     };
 
-    struct WebSocket{
+    struct OutputMessage {
+        char buffer[4000];
+        char *begin;
+        char *end;
+
+        void reset() {
+            begin = buffer + 16;
+            end = begin;
+        }
+    };
+
+    struct WebSocket {
         Socket socket;
-        bool mask;
+        bool useMask;
+        OutputMessage outputMessage;
 
-        explicit WebSocket(const std::string &hostname, int port, const std::string &path, bool mask);
+        explicit WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask);
 
-        status readLine(char* buffer);
+        status readLine(char *buffer);
 
-        bool isClosed(){
+        bool isClosed() {
             return socket.isClosed();
         }
 
-        status getMessage(char* dst);
+        status getMessage(char *dst);
+
+        OutputMessage& getOutputMessage();
+
+        status sendLastOutputMessage(wsheader_type::opcode_type type);
     };
 
 } // bhft

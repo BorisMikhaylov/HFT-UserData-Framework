@@ -5,22 +5,6 @@
 #include "fastsocket.h"
 
 namespace bhft {
-    struct wsheader_type {
-        unsigned header_size;
-        bool fin;
-        bool mask;
-        enum opcode_type {
-            CONTINUATION = 0x0,
-            TEXT_FRAME = 0x1,
-            BINARY_FRAME = 0x2,
-            CLOSE = 8,
-            PING = 9,
-            PONG = 0xa,
-        } opcode;
-        int N0;
-        uint64_t N;
-        uint8_t masking_key[4];
-    };
 
     Socket::Socket(const std::string &hostname, int port) : socket(INVALID_SOCKET), begin(readBuffer), end(readBuffer),
                                                             socketClosed(false) {
@@ -194,7 +178,7 @@ namespace bhft {
                 }
                 dst += ws.N;
             } else if (ws.opcode == wsheader_type::PING) {
-//            if (ws.mask) {
+//            if (ws.useMask) {
 //                for (size_t i = 0; i != ws.N; ++i) {
 //                    rxbuf[i + ws.header_size] ^= ws.masking_key[i & 0x3];
 //                }
@@ -212,6 +196,65 @@ namespace bhft {
                 return closed;
             }
         } while (!ws.fin);
+    }
+
+    status WebSocket::sendLastOutputMessage(wsheader_type::opcode_type type) {
+        const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
+        // TODO: consider acquiring a lock on txbuf...
+        int messageSize = outputMessage.end - outputMessage.begin;
+
+        int headerSize = 2 + (messageSize >= 126 ? 2 : 0) + (messageSize >= 65536 ? 6 : 0) + (useMask ? 4 : 0);
+        uint8_t *header = reinterpret_cast<uint8_t *>(outputMessage.begin - headerSize);
+        header[0] = 0x80 | type;
+        if (messageSize < 126) {
+            header[1] = (messageSize & 0xff) | (useMask ? 0x80 : 0);
+            if (useMask) {
+                header[2] = masking_key[0];
+                header[3] = masking_key[1];
+                header[4] = masking_key[2];
+                header[5] = masking_key[3];
+            }
+        } else if (messageSize < 65536) {
+            header[1] = 126 | (useMask ? 0x80 : 0);
+            header[2] = (messageSize >> 8) & 0xff;
+            header[3] = (messageSize >> 0) & 0xff;
+            if (useMask) {
+                header[4] = masking_key[0];
+                header[5] = masking_key[1];
+                header[6] = masking_key[2];
+                header[7] = masking_key[3];
+            }
+        } else { // TODO: run coverage testing here
+            header[1] = 127 | (useMask ? 0x80 : 0);
+            header[2] = (messageSize >> 56) & 0xff;
+            header[3] = (messageSize >> 48) & 0xff;
+            header[4] = (messageSize >> 40) & 0xff;
+            header[5] = (messageSize >> 32) & 0xff;
+            header[6] = (messageSize >> 24) & 0xff;
+            header[7] = (messageSize >> 16) & 0xff;
+            header[8] = (messageSize >> 8) & 0xff;
+            header[9] = (messageSize >> 0) & 0xff;
+            if (useMask) {
+                header[10] = masking_key[0];
+                header[11] = masking_key[1];
+                header[12] = masking_key[2];
+                header[13] = masking_key[3];
+            }
+        }
+        // N.B. - txbuf will keep growing until it can be transmitted over the socket:
+        if (useMask) {
+
+            for (size_t i = 0; i != messageSize; ++i) {
+                outputMessage.begin[i] ^= masking_key[i & 0x3];
+            }
+
+        }
+        socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
+    }
+
+    OutputMessage &WebSocket::getOutputMessage() {
+        outputMessage.reset();
+        return outputMessage;
     }
 
 } // bhft
