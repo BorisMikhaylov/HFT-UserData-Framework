@@ -92,6 +92,22 @@ namespace bhft {
             begin = buffer + 16;
             end = begin;
         }
+
+        void write(char ch) {
+            *end++ = ch;
+        }
+
+        void write(const char *str) {
+            while (*str != 0) {
+                *end++ = *str++;
+            }
+        }
+
+        void write(const char *start, const char *finish){
+            while (start != finish){
+                *end++ = *start++;
+            }
+        }
     };
 
     struct WebSocket {
@@ -109,7 +125,7 @@ namespace bhft {
 
         status getMessage(char *dst);
 
-        OutputMessage& getOutputMessage();
+        OutputMessage &getOutputMessage();
 
         status sendLastOutputMessage(wsheader_type::opcode_type type);
     };

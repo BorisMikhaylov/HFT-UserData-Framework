@@ -73,8 +73,8 @@ namespace bhft {
         return success;
     }
 
-    WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool mask)
-            : socket(hostname, port) {
+    WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask)
+            : socket(hostname, port), useMask(useMask) {
         if (isClosed()) {
             return;
         }
@@ -196,6 +196,7 @@ namespace bhft {
                 return closed;
             }
         } while (!ws.fin);
+        *dst = 0;
     }
 
     status WebSocket::sendLastOutputMessage(wsheader_type::opcode_type type) {
@@ -259,6 +260,31 @@ namespace bhft {
 
 } // bhft
 
-int main() {
+int main1() {
     bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
+    bhft::OutputMessage &message = ws.getOutputMessage();
+    const auto p1 = std::chrono::system_clock::now();
+    int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
+            p1.time_since_epoch()).count();
+
+    char buffer[1000];
+    sprintf(buffer,
+            R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
+            timestamp);
+    message.write(buffer);
+    ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+    ws.getMessage(buffer);
+    std::cout << buffer << std::endl;
+
+    bhft::OutputMessage &message2 = ws.getOutputMessage();
+    message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
+    ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+    ws.getMessage(buffer);
+    std::cout << buffer << std::endl;
+
+    while (true){
+        ws.getMessage(buffer);
+        std::cout << buffer << std::endl << std::endl;
+
+    }
 }

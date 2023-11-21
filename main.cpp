@@ -7,6 +7,7 @@
 #include <cstring>
 #include <chrono>
 #include <utility>
+#include "fastsocket.h"
 
 auto startTimestamp = std::chrono::high_resolution_clock::now();
 auto endTimestamp = std::chrono::high_resolution_clock::now() - startTimestamp;
@@ -349,12 +350,6 @@ struct JsonOut {
 
 using namespace bparser;
 
-int getTimestamp() {
-    const auto p1 = std::chrono::system_clock::now();
-    return std::chrono::duration_cast<std::chrono::seconds>(
-            p1.time_since_epoch()).count();
-}
-
 void checkSimpleValue(std::string str, int result, int pos) {
     input in(str);
     int res = in.parseSimpleValue();
@@ -403,10 +398,10 @@ static state *dataObjectIdMap = buildStateMachine(dataObjectId, 6);
 JsonOut jsonOutObject;
 
 struct DataObjectCallback : ObjectCallback {
-    easywsclient::WebSocket *ws;
+    bhft::WebSocket *ws;
     JsonOut &out;
 
-    explicit DataObjectCallback(easywsclient::WebSocket *ws, JsonOut &out) : ws(ws), out(out),
+    explicit DataObjectCallback(bhft::WebSocket *ws, JsonOut &out) : ws(ws), out(out),
                                                                              ObjectCallback(dataObjectIdMap) {}
 
     void valueForField(int fieldId, char *begin, char *end) override {
@@ -430,7 +425,9 @@ struct DataObjectCallback : ObjectCallback {
         out.addField("\"apiKey\"", "\"xNEkpMtgh6lF7v8K\"");
         out.addField("\"sign\"", "\"SkAjqP4LC9UexmrX\"");
         out.finishObject();
-        ws->send(out.getStr());
+        bhft::OutputMessage &message = ws->getOutputMessage();
+        message.write(out.getStr());
+        ws->sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         endTimestamp = std::chrono::high_resolution_clock::now() - startTimestamp;
         std::cout << "Sending: " << out.getStr() << std::endl;
         std::cout << "Time: " << std::chrono::duration_cast<std::chrono::microseconds>(
@@ -443,7 +440,7 @@ struct DataObjectCallback : ObjectCallback {
 struct DataArrayCallback : ArrayCallback {
     DataObjectCallback dataObjectCallback;
 
-    explicit DataArrayCallback(easywsclient::WebSocket *ws, JsonOut &out) : dataObjectCallback(ws, out) {}
+    explicit DataArrayCallback(bhft::WebSocket *ws, JsonOut &out) : dataObjectCallback(ws, out) {}
 
     ArrayCallback *willParseArray() override {
         return nullptr;
@@ -468,7 +465,7 @@ static state *quoteObjectIdMap = buildStateMachine(quoteObjectId, 1);
 struct QuoteObjectCallback : ObjectCallback {
     DataArrayCallback dataArrayCallback;
 
-    explicit QuoteObjectCallback(easywsclient::WebSocket *ws, JsonOut &out) : dataArrayCallback(ws, out),
+    explicit QuoteObjectCallback(bhft::WebSocket *ws, JsonOut &out) : dataArrayCallback(ws, out),
                                                                               ObjectCallback(quoteObjectIdMap) {}
 
     void valueForField(int field_id, char *begin, char *end) override {
@@ -487,60 +484,38 @@ struct QuoteObjectCallback : ObjectCallback {
     }
 };
 
-void parseQuote(easywsclient::WebSocket *ws, std::string message) {
+void parseQuote(bhft::WebSocket *ws, std::string message) {
     jsonOutObject.reset();
     QuoteObjectCallback quoteObjectCallback(ws, jsonOutObject);
     input in(message);
     in.parseObject(&quoteObjectCallback);
 }
 
-std::string readMessage(easywsclient::WebSocket *ws) {
-    std::string result;
-    while (result.empty()) {
-        ws->poll();
-        ws->dispatch([&result](const std::string &message) {
-            result = message;
-            startTimestamp = std::chrono::high_resolution_clock::now();
-        });
-    }
-    std::cout << "Read message: " << result << std::endl;
-    return result;
-}
-
-int main1() {
-    auto ws = easywsclient::WebSocket::from_url("ws://127.0.0.1:9999/?url=wss://ws.okx.com:8443/ws/v5/private");
-
+int main() {
+    bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
+    bhft::OutputMessage &message = ws.getOutputMessage();
     const auto p1 = std::chrono::system_clock::now();
     int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
             p1.time_since_epoch()).count();
 
-    char loginBuffer[1000];
-    sprintf(loginBuffer,
+    char buffer[1000];
+    sprintf(buffer,
             R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
             timestamp);
-    std::cout << loginBuffer << std::endl;
-    std::string loginMessage = loginBuffer;
-    ws->send(loginMessage);
+    message.write(buffer);
+    ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+    ws.getMessage(buffer);
+    std::cout << buffer << std::endl;
 
-    auto message = readMessage(ws);
-    std::cout << "Received message: " << message << std::endl;
-    if (message != "Login OK") {
-        std::cout << "Login failed";
-        exit(1);
+    bhft::OutputMessage &message2 = ws.getOutputMessage();
+    message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
+    ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+    ws.getMessage(buffer);
+    std::cout << buffer << std::endl;
+
+    while (true){
+        ws.getMessage(buffer);
+        std::cout << "Arrived: " << buffer << std::endl << "";
+        parseQuote(&ws, buffer);
     }
-
-    ws->send(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
-    message = readMessage(ws);
-
-    std::cout << "Received message: " << message << std::endl;
-    if (message != "Subscribe OK") {
-        std::cout << "Subscribe failed";
-        exit(1);
-    }
-
-    while (true) {
-        parseQuote(ws, readMessage(ws));
-    }
-    ws->close();
-    delete ws;
 }
