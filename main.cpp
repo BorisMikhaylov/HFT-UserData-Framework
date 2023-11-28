@@ -9,10 +9,6 @@
 #include <utility>
 #include "fastsocket.h"
 
-auto startTimestamp = std::chrono::high_resolution_clock::now();
-auto endTimestamp = std::chrono::high_resolution_clock::now() - startTimestamp;
-
-
 namespace bparser {
 
     struct state;
@@ -402,7 +398,7 @@ struct DataObjectCallback : ObjectCallback {
     JsonOut &out;
 
     explicit DataObjectCallback(bhft::WebSocket *ws, JsonOut &out) : ws(ws), out(out),
-                                                                             ObjectCallback(dataObjectIdMap) {}
+                                                                     ObjectCallback(dataObjectIdMap) {}
 
     void valueForField(int fieldId, char *begin, char *end) override {
         if (fieldId < 0) return;
@@ -428,10 +424,6 @@ struct DataObjectCallback : ObjectCallback {
         bhft::OutputMessage &message = ws->getOutputMessage();
         message.write(out.getStr());
         ws->sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        endTimestamp = std::chrono::high_resolution_clock::now() - startTimestamp;
-        std::cout << "Sending: " << out.getStr() << std::endl;
-        std::cout << "Time: " << std::chrono::duration_cast<std::chrono::microseconds>(
-                endTimestamp).count() << std::endl << std::endl;
         out.reset();
     }
 };
@@ -466,7 +458,7 @@ struct QuoteObjectCallback : ObjectCallback {
     DataArrayCallback dataArrayCallback;
 
     explicit QuoteObjectCallback(bhft::WebSocket *ws, JsonOut &out) : dataArrayCallback(ws, out),
-                                                                              ObjectCallback(quoteObjectIdMap) {}
+                                                                      ObjectCallback(quoteObjectIdMap) {}
 
     void valueForField(int field_id, char *begin, char *end) override {
     }
@@ -484,38 +476,42 @@ struct QuoteObjectCallback : ObjectCallback {
     }
 };
 
-void parseQuote(bhft::WebSocket *ws, std::string message) {
+void parseQuote(bhft::WebSocket *ws, const std::string &message) {
     jsonOutObject.reset();
     QuoteObjectCallback quoteObjectCallback(ws, jsonOutObject);
     input in(message);
     in.parseObject(&quoteObjectCallback);
 }
 
+static char buffer[10000000];
+
 int main() {
-    bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
-    bhft::OutputMessage &message = ws.getOutputMessage();
-    const auto p1 = std::chrono::system_clock::now();
-    int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
-            p1.time_since_epoch()).count();
+    while (true) {
+        bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
+        //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
+        bhft::OutputMessage &message = ws.getOutputMessage();
+        const auto p1 = std::chrono::system_clock::now();
+        int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
+                p1.time_since_epoch()).count();
 
-    char buffer[1000];
-    sprintf(buffer,
-            R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
-            timestamp);
-    message.write(buffer);
-    ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-    ws.getMessage(buffer);
-    std::cout << buffer << std::endl;
-
-    bhft::OutputMessage &message2 = ws.getOutputMessage();
-    message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
-    ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-    ws.getMessage(buffer);
-    std::cout << buffer << std::endl;
-
-    while (true){
+        sprintf(buffer,
+                R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
+                timestamp);
+        message.write(buffer);
+        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         ws.getMessage(buffer);
-        std::cout << "Arrived: " << buffer << std::endl << "";
-        parseQuote(&ws, buffer);
+        std::cout << buffer << std::endl;
+
+        bhft::OutputMessage &message2 = ws.getOutputMessage();
+        message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
+        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+        ws.getMessage(buffer);
+        std::cout << buffer << std::endl;
+
+        while (!ws.isClosed()) {
+            ws.getMessage(buffer);
+            std::cout << "Arrived: " << buffer << std::endl << "";
+            parseQuote(&ws, std::string(buffer, buffer + strlen(buffer)));
+        }
     }
 }
