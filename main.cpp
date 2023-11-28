@@ -130,10 +130,10 @@ namespace bparser {
         char *current;
         char *end;
 
-        explicit input(std::string &str) {
-            begin = &*str.begin();
-            current = &*str.begin();
-            end = &*str.end();
+        explicit input(char* str) {
+            begin = str;
+            current = str;
+            end = str+strlen(str);
         }
 
         void log(const std::string &message) {
@@ -346,7 +346,7 @@ struct JsonOut {
 
 using namespace bparser;
 
-void checkSimpleValue(std::string str, int result, int pos) {
+void checkSimpleValue(char* str, int result, int pos) {
     input in(str);
     int res = in.parseSimpleValue();
     std::cout << str << ((result != res || in.begin + pos != in.current) ? ": error" : ": success")
@@ -369,7 +369,7 @@ void testIdentifier() {
             "id", "29835", "lqknlenq", "e34e5r6t7yuijkj"
     };
     state *startState = buildStateMachine(ids, 4);
-    std::string str = R"(
+    char* str = R"(
  "lqknlenq"  )";
     input in(str);
     std::cout << in.parseIdentifier(startState);
@@ -476,7 +476,7 @@ struct QuoteObjectCallback : ObjectCallback {
     }
 };
 
-void parseQuote(bhft::WebSocket *ws, const std::string &message) {
+void parseQuote(bhft::WebSocket *ws, char* message) {
     jsonOutObject.reset();
     QuoteObjectCallback quoteObjectCallback(ws, jsonOutObject);
     input in(message);
@@ -487,8 +487,8 @@ static char buffer[10000000];
 
 int main() {
     while (true) {
-        bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
-        //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
+        //bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
+        bhft::WebSocket ws("127.0.0.1", 8080, "", true);
         bhft::OutputMessage &message = ws.getOutputMessage();
         const auto p1 = std::chrono::system_clock::now();
         int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
@@ -511,7 +511,7 @@ int main() {
         while (!ws.isClosed()) {
             ws.getMessage(buffer);
             std::cout << "Arrived: " << buffer << std::endl << "";
-            parseQuote(&ws, std::string(buffer, buffer + strlen(buffer)));
+            parseQuote(&ws, buffer);
         }
     }
 }
