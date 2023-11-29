@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <iostream>
+#include <cstring>
 
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET (-1)
