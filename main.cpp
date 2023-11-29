@@ -143,7 +143,7 @@ namespace bparser {
                                                                                     end(anEnd) {}
 
 
-#define INLOG logger(__FILE__, __LINE__, begin, current, end)
+//#define INLOG logger(__FILE__, __LINE__, begin, current, end)
 
 
     struct input {
@@ -178,14 +178,14 @@ namespace bparser {
 
         int parseIdentifier(state *begin_state) {
             if (skipSpaces() == -2) {
-                INLOG("Wrong spaces");
+                //INLOG("Wrong spaces");
                 return -2;
             }
             if (*current++ != '"') {
-                INLOG("Not a \"");
+                //INLOG("Not a \"");
                 return -2;
             }
-            INLOG("Start parsing identifier \"");
+            //INLOG("Start parsing identifier \"");
             state *current_state = begin_state;
             while (current != end && !current_state->isTerminal) {
                 current_state = current_state->arr[*current++];
@@ -199,7 +199,7 @@ namespace bparser {
 
         int parseSimpleValue() {
             if (skipSpaces() == -2) {
-                INLOG("Wrong spaces");
+                //INLOG("Wrong spaces");
             }
             if (*current++ == '"') {
                 bool prevIsSlash = false;
@@ -220,15 +220,15 @@ namespace bparser {
 
         [[maybe_unused]] int parseArray(ArrayCallback *arr) {
             if (skipSpaces() == -2) {
-                INLOG("Wrong spaces");
+                //INLOG("Wrong spaces");
                 return -2;
             }
             if (*current++ != '[') {
-                INLOG("Not array");
+                //INLOG("Not array");
                 return -2;
             }
             if (skipSpaces() == -2) {
-                INLOG("Wrong spaces");
+                //INLOG("Wrong spaces");
                 return -2;
             }
             if (*current == ']') {
@@ -237,7 +237,7 @@ namespace bparser {
             }
             do {
                 if (skipSpaces() == -2) {
-                    INLOG("Wrong spaces");
+                    //INLOG("Wrong spaces");
                     return -2;
                 }
                 if (*current == '{') {
@@ -251,12 +251,12 @@ namespace bparser {
                     if (arr != nullptr) arr->nextValue(start, finish);
                 }
                 if (skipSpaces() == -2) {
-                    INLOG("Wrong spaces");
+                    //INLOG("Wrong spaces");
                     return -2;
                 }
             } while (*current++ == ',');
             if (current[-1] != ']') {
-                INLOG("Not end of array");
+                //INLOG("Not end of array");
                 return -2;
             }
             if (arr != nullptr) arr->arrayFinished();
@@ -265,14 +265,14 @@ namespace bparser {
 
         int parseObject(ObjectCallback *obj) {
             if (skipSpaces() == -2) {
-                INLOG("Wrong spaces");
+                //INLOG("Wrong spaces");
                 return -2;
             }
             if (*current++ != '{') {
                 return -2;
             }
             if (skipSpaces() == -2) {
-                INLOG("Wrong spaces");
+                //INLOG("Wrong spaces");
                 return -2;
             }
             if (*current == '}') {
@@ -281,17 +281,17 @@ namespace bparser {
             }
             do {
                 if (skipSpaces() == -2) {
-                    INLOG("Wrong spaces");
+                    //INLOG("Wrong spaces");
                     return -2;
                 }
                 int id = parseIdentifier(obj == nullptr ? unknownIds : obj->idMap);
                 if (skipSpaces() == -2) {
-                    INLOG("Wrong spaces");
+                    //INLOG("Wrong spaces");
                     return -2;
                 }
                 if (*current++ != ':') return -2;
                 if (skipSpaces() == -2) {
-                    INLOG("Wrong spaces");
+                    //INLOG("Wrong spaces");
                     return -2;
                 }
                 if (*current == '{') {
@@ -305,7 +305,7 @@ namespace bparser {
                     if (obj != nullptr) obj->valueForField(id, start, finish);
                 }
                 if (skipSpaces() == -2) {
-                    INLOG("Wrong spaces");
+                    //INLOG("Wrong spaces");
                     return -2;
                 }
             } while (*current++ == ',');
