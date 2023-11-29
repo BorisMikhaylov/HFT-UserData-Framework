@@ -9,6 +9,8 @@
 #include <utility>
 #include "fastsocket.h"
 
+bool bparser_log = false;
+
 namespace bparser {
 
     struct state;
@@ -424,6 +426,7 @@ struct DataObjectCallback : ObjectCallback {
         bhft::OutputMessage &message = ws->getOutputMessage();
         message.write(out.getStr());
         ws->sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+        if (bparser_log) std::cout << out.getStr() << std::endl;
         out.reset();
     }
 };
@@ -485,10 +488,12 @@ void parseQuote(bhft::WebSocket *ws, char* message) {
 
 static char buffer[10000000];
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc > 1) bparser_log = true;
     while (true) {
-        //bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
-        bhft::WebSocket ws("127.0.0.1", 8080, "", true);
+        std::cout << "Connection starting..." << std::endl << std::endl;
+        bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
+        //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
         bhft::OutputMessage &message = ws.getOutputMessage();
         const auto p1 = std::chrono::system_clock::now();
         int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
@@ -500,17 +505,18 @@ int main() {
         message.write(buffer);
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         ws.getMessage(buffer);
-        std::cout << buffer << std::endl;
+        std::cout << "Login: " << buffer << std::endl;
 
         bhft::OutputMessage &message2 = ws.getOutputMessage();
         message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         ws.getMessage(buffer);
-        std::cout << buffer << std::endl;
+        std::cout << "Subscribe: " << buffer << std::endl;
 
+        std::cout << "Connection started" << std::endl << std::endl;
         while (!ws.isClosed()) {
             ws.getMessage(buffer);
-            std::cout << "Arrived: " << buffer << std::endl << "";
+            if (bparser_log) std::cout << "Arrived: " << buffer << std::endl << "";
             parseQuote(&ws, buffer);
         }
     }

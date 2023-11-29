@@ -49,6 +49,7 @@ namespace bhft {
                 //TODO wait for data and PING if there's no data
                 continue;
             } else if (cntReadBytes <= 0) {
+                socketClosed = true;
                 return closed;
             }
             begin = readBuffer;
@@ -113,14 +114,14 @@ namespace bhft {
         wsheader_type ws;
         do {
             char header[16];
-            socket.read(header, 2);
+            if (socket.read(header, 2) == closed) return closed;
             const uint8_t *data = (uint8_t *) header;
             ws.fin = (data[0] & 0x80) == 0x80;
             ws.opcode = (wsheader_type::opcode_type) (data[0] & 0x0f);
             ws.mask = (data[1] & 0x80) == 0x80;
             ws.N0 = (data[1] & 0x7f);
             ws.header_size = 2 + (ws.N0 == 126 ? 2 : 0) + (ws.N0 == 127 ? 8 : 0) + (ws.mask ? 4 : 0);
-            socket.read(header + 2, ws.header_size - 2);
+            if (socket.read(header + 2, ws.header_size - 2) == closed) return closed;
             int i = 0;
             if (ws.N0 < 126) {
                 ws.N = ws.N0;
@@ -171,7 +172,7 @@ namespace bhft {
                     || ws.opcode == wsheader_type::BINARY_FRAME
                     || ws.opcode == wsheader_type::CONTINUATION
                     ) {
-                socket.read(dst, ws.N);
+                if (socket.read(dst, ws.N)== closed) return closed;
                 if (ws.mask) {
                     for (size_t i = 0; i != ws.N; ++i) {
                         dst[i] ^= ws.masking_key[i & 0x3];
@@ -179,12 +180,12 @@ namespace bhft {
                 }
                 dst += ws.N;
             } else if (ws.opcode == wsheader_type::PING) {
-                socket.read(dst, ws.N);
+                if (socket.read(dst, ws.N)== closed) return closed;
                 getOutputMessage().write(dst, dst + ws.N);
                 sendLastOutputMessage(wsheader_type::PONG);
                 continue;
             } else if (ws.opcode == wsheader_type::PONG) {
-                socket.read(dst, ws.N);
+                if (socket.read(dst, ws.N)== closed) return closed;
                 continue;
             } else {
                 socket.socketClosed = true;
@@ -195,8 +196,8 @@ namespace bhft {
     }
 
     status WebSocket::sendLastOutputMessage(wsheader_type::opcode_type type) {
-        //const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
-        const uint8_t masking_key[4] = {0, 0, 0, 0};
+        const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
+        //cont uint8_t masking_key[4] = {0, 0, 0, 0};
         // TODO: consider acquiring a lock on txbuf...
         int messageSize = outputMessage.end - outputMessage.begin;
 
@@ -206,20 +207,20 @@ namespace bhft {
         if (messageSize < 126) {
             header[1] = (messageSize & 0xff) | (useMask ? 0x80 : 0);
             if (useMask) {
-//                header[2] = masking_key[0];
-//                header[3] = masking_key[1];
-//                header[4] = masking_key[2];
-//                header[5] = masking_key[3];
+                header[2] = masking_key[0];
+                header[3] = masking_key[1];
+                header[4] = masking_key[2];
+                header[5] = masking_key[3];
             }
         } else if (messageSize < 65536) {
             header[1] = 126 | (useMask ? 0x80 : 0);
             header[2] = (messageSize >> 8) & 0xff;
             header[3] = (messageSize >> 0) & 0xff;
             if (useMask) {
-//                header[4] = masking_key[0];
-//                header[5] = masking_key[1];
-//                header[6] = masking_key[2];
-//                header[7] = masking_key[3];
+                header[4] = masking_key[0];
+                header[5] = masking_key[1];
+                header[6] = masking_key[2];
+                header[7] = masking_key[3];
             }
         } else { // TODO: run coverage testing here
             header[1] = 127 | (useMask ? 0x80 : 0);
@@ -232,18 +233,18 @@ namespace bhft {
             header[8] = (messageSize >> 8) & 0xff;
             header[9] = (messageSize >> 0) & 0xff;
             if (useMask) {
-//                header[10] = masking_key[0];
-//                header[11] = masking_key[1];
-//                header[12] = masking_key[2];
-//                header[13] = masking_key[3];
+                header[10] = masking_key[0];
+                header[11] = masking_key[1];
+                header[12] = masking_key[2];
+                header[13] = masking_key[3];
             }
         }
         // N.B. - txbuf will keep growing until it can be transmitted over the socket:
         if (useMask) {
 // could be omitted when masking key is zeros
-//            for (size_t i = 0; i != messageSize; ++i) {
-//                outputMessage.begin[i] ^= masking_key[i & 0x3];
-//            }
+            for (size_t i = 0; i != messageSize; ++i) {
+                outputMessage.begin[i] ^= masking_key[i & 0x3];
+            }
 
         }
         socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
