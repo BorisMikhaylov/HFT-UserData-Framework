@@ -11,6 +11,25 @@
 
 bool bparser_log = false;
 
+struct InputData {
+    char *begin[6];
+    char *end[6];
+    int mask;
+
+    void reset() {
+        mask = 0;
+    }
+};
+
+static InputData inputData[1000];
+
+struct InputDataSet {
+    InputData *begin;
+    InputData *end;
+
+    InputDataSet(InputData *begin, InputData *anEnd) : begin(begin), end(anEnd) {}
+};
+
 namespace bparser {
 
     struct state;
@@ -132,10 +151,10 @@ namespace bparser {
         char *current;
         char *end;
 
-        explicit input(char* str) {
+        explicit input(char *str) {
             begin = str;
             current = str;
-            end = str+strlen(str);
+            end = str + strlen(str);
         }
 
         void log(const std::string &message) {
@@ -297,58 +316,9 @@ namespace bparser {
     };
 }
 
-struct JsonOut {
-    char buffer[10000]{};
-    char *current;
-    char prefix = '{';
-
-    JsonOut() {
-        current = buffer;
-    }
-
-    void addField(const char *name, const char *valueBegin, const char *valueEnd) {
-        *current++ = prefix;
-        prefix = ',';
-        while (*name != 0) {
-            *current++ = *name++;
-        }
-        *current++ = ':';
-        while (valueBegin < valueEnd) {
-            *current++ = *valueBegin++;
-        }
-    }
-
-    void addField(const char *name, const char *value) {
-        *current++ = prefix;
-        prefix = ',';
-        while (*name != 0) {
-            *current++ = *name++;
-        }
-        *current++ = ':';
-        while (*value != 0) {
-            *current++ = *value++;
-        }
-    }
-
-    void reset() {
-        current = buffer;
-        prefix = '{';
-    }
-
-    char *getStr() {
-        return buffer;
-    }
-
-    void finishObject() {
-        *current++ = '}';
-        *current = 0;
-    }
-};
-
-
 using namespace bparser;
 
-void checkSimpleValue(char* str, int result, int pos) {
+void checkSimpleValue(char *str, int result, int pos) {
     input in(str);
     int res = in.parseSimpleValue();
     std::cout << str << ((result != res || in.begin + pos != in.current) ? ": error" : ": success")
@@ -371,7 +341,7 @@ void testIdentifier() {
             "id", "29835", "lqknlenq", "e34e5r6t7yuijkj"
     };
     state *startState = buildStateMachine(ids, 4);
-    char* str = R"(
+    char *str = R"(
  "lqknlenq"  )";
     input in(str);
     std::cout << in.parseIdentifier(startState);
@@ -393,14 +363,16 @@ static char *outputObjectId[] = {"\"orderId\"",
 
 static state *dataObjectIdMap = buildStateMachine(dataObjectId, 6);
 
-JsonOut jsonOutObject;
-
 struct DataObjectCallback : ObjectCallback {
     bhft::WebSocket *ws;
-    JsonOut &out;
+    InputDataSet &inputDataSet;
+    InputData *currentInput;
 
-    explicit DataObjectCallback(bhft::WebSocket *ws, JsonOut &out) : ws(ws), out(out),
-                                                                     ObjectCallback(dataObjectIdMap) {}
+    explicit DataObjectCallback(bhft::WebSocket *ws, InputDataSet &inputDataSet) : ws(ws), inputDataSet(inputDataSet),
+                                                                                   ObjectCallback(dataObjectIdMap),
+                                                                                   currentInput(inputDataSet.end) {
+        currentInput->reset();
+    }
 
     void valueForField(int fieldId, char *begin, char *end) override {
         if (fieldId < 0) return;
@@ -408,7 +380,9 @@ struct DataObjectCallback : ObjectCallback {
             begin++;
             end--;
         }
-        out.addField(outputObjectId[fieldId], begin, end);
+        currentInput->begin[fieldId] = begin;
+        currentInput->end[fieldId] = end;
+        currentInput->mask |= 1 << fieldId;
     }
 
     ObjectCallback *willParseObject(int field_id) override {
@@ -420,14 +394,10 @@ struct DataObjectCallback : ObjectCallback {
     }
 
     void objectFinished() override {
-        out.addField("\"apiKey\"", "\"xNEkpMtgh6lF7v8K\"");
-        out.addField("\"sign\"", "\"SkAjqP4LC9UexmrX\"");
-        out.finishObject();
-        bhft::OutputMessage &message = ws->getOutputMessage();
-        message.write(out.getStr());
-        ws->sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        if (bparser_log) std::cout << out.getStr() << std::endl;
-        out.reset();
+        if (currentInput->mask != 0) { // TODO check all required fields
+            currentInput = ++inputDataSet.end;
+        }
+        currentInput->reset();
     }
 };
 
@@ -435,7 +405,8 @@ struct DataObjectCallback : ObjectCallback {
 struct DataArrayCallback : ArrayCallback {
     DataObjectCallback dataObjectCallback;
 
-    explicit DataArrayCallback(bhft::WebSocket *ws, JsonOut &out) : dataObjectCallback(ws, out) {}
+    explicit DataArrayCallback(bhft::WebSocket *ws, InputDataSet &inputDataSet) : dataObjectCallback(ws,
+                                                                                                     inputDataSet) {}
 
     ArrayCallback *willParseArray() override {
         return nullptr;
@@ -460,8 +431,8 @@ static state *quoteObjectIdMap = buildStateMachine(quoteObjectId, 1);
 struct QuoteObjectCallback : ObjectCallback {
     DataArrayCallback dataArrayCallback;
 
-    explicit QuoteObjectCallback(bhft::WebSocket *ws, JsonOut &out) : dataArrayCallback(ws, out),
-                                                                      ObjectCallback(quoteObjectIdMap) {}
+    explicit QuoteObjectCallback(bhft::WebSocket *ws, InputDataSet &inputDataSet) : dataArrayCallback(ws, inputDataSet),
+                                                                                    ObjectCallback(quoteObjectIdMap) {}
 
     void valueForField(int field_id, char *begin, char *end) override {
     }
@@ -479,16 +450,31 @@ struct QuoteObjectCallback : ObjectCallback {
     }
 };
 
-void parseQuote(bhft::WebSocket *ws, char* message) {
-    jsonOutObject.reset();
-    QuoteObjectCallback quoteObjectCallback(ws, jsonOutObject);
+void parseQuote(bhft::WebSocket *ws, char *message) {
+    InputDataSet inputDataSet(inputData, inputData);
+    QuoteObjectCallback quoteObjectCallback(ws, inputDataSet);
     input in(message);
-    in.parseObject(&quoteObjectCallback);
+    if (in.parseObject(&quoteObjectCallback) == -2) return;
+    for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
+        auto &out = ws->getOutputMessage();
+        char prefix = '{';
+        for (int i = 0; i < 6; ++i) {
+            if ((input->mask >> i) & 1){
+                out.write(prefix);
+                prefix = ',';
+                out.write(outputObjectId[i]);
+                out.write(':');
+                out.write(input->begin[i], input->end[i]);
+            }
+        }
+        out.write(R"(,"apiKey":"xNEkpMtgh6lF7v8K","sign":"SkAjqP4LC9UexmrX"})");
+        ws->sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+    }
 }
 
 static char buffer[10000000];
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     if (argc > 1) bparser_log = true;
     while (true) {
         std::cout << "Connection starting..." << std::endl << std::endl;
