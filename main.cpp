@@ -469,6 +469,7 @@ void parseQuote(bhft::WebSocket *ws, char *message) {
         }
         out.write(R"(,"apiKey":"xNEkpMtgh6lF7v8K","sign":"SkAjqP4LC9UexmrX"})");
         ws->sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+        if (bparser_log) std::cout << "Sending message: " << std::endl;
     }
 }
 
