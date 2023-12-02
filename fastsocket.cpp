@@ -72,7 +72,7 @@ namespace bhft {
             BTRACE count -= ret;
             BTRACE src += ret;
         }
-        return success;
+        BTRACE return success;
     }
 
     WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask)
@@ -193,6 +193,7 @@ namespace bhft {
             }
         } while (!ws.fin);
         *dst = 0;
+        return success;
     }
 
     status WebSocket::sendLastOutputMessage(wsheader_type::opcode_type type) {
@@ -247,7 +248,7 @@ namespace bhft {
             }
 
         }
-        BTRACE socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
+        BTRACE return socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
     }
 
     OutputMessage &WebSocket::getOutputMessage() {
