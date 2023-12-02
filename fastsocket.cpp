@@ -172,7 +172,7 @@ namespace bhft {
                     || ws.opcode == wsheader_type::BINARY_FRAME
                     || ws.opcode == wsheader_type::CONTINUATION
                     ) {
-                if (socket.read(dst, ws.N)== closed) return closed;
+                if (socket.read(dst, ws.N) == closed) return closed;
                 if (ws.mask) {
                     for (size_t i = 0; i != ws.N; ++i) {
                         dst[i] ^= ws.masking_key[i & 0x3];
@@ -180,12 +180,12 @@ namespace bhft {
                 }
                 dst += ws.N;
             } else if (ws.opcode == wsheader_type::PING) {
-                if (socket.read(dst, ws.N)== closed) return closed;
+                if (socket.read(dst, ws.N) == closed) return closed;
                 getOutputMessage().write(dst, dst + ws.N);
                 sendLastOutputMessage(wsheader_type::PONG);
                 continue;
             } else if (ws.opcode == wsheader_type::PONG) {
-                if (socket.read(dst, ws.N)== closed) return closed;
+                if (socket.read(dst, ws.N) == closed) return closed;
                 continue;
             } else {
                 socket.socketClosed = true;
@@ -193,6 +193,7 @@ namespace bhft {
             }
         } while (!ws.fin);
         *dst = 0;
+        return success;
     }
 
     status WebSocket::sendLastOutputMessage(wsheader_type::opcode_type type) {
@@ -247,7 +248,7 @@ namespace bhft {
             }
 
         }
-        socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
+        return socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
     }
 
     OutputMessage &WebSocket::getOutputMessage() {
