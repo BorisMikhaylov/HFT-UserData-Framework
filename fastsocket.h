@@ -30,6 +30,8 @@
 
 #include <errno.h>
 
+#define BTRACE std::cout << "Tracing " << __FILE__ << ":" << __LINE__ << std::endl;
+
 #define socketerrno errno
 #define SOCKET_EAGAIN_EINPROGRESS EAGAIN
 #define SOCKET_EWOULDBLOCK EWOULDBLOCK

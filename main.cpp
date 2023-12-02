@@ -17,7 +17,7 @@ struct InputData {
     int mask;
 
     void reset() {
-        mask = 0;
+        BTRACE mask = 0;
     }
 };
 
@@ -476,35 +476,36 @@ void parseQuote(bhft::WebSocket *ws, char *message) {
 static char buffer[10000000];
 
 int main(int argc, char **argv) {
+    BTRACE
     if (argc > 1) bparser_log = true;
     while (true) {
-        std::cout << "Connection starting..." << std::endl << std::endl;
-        bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
-        //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
-        bhft::OutputMessage &message = ws.getOutputMessage();
-        const auto p1 = std::chrono::system_clock::now();
-        int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
+        BTRACE std::cout << "Connection starting..." << std::endl << std::endl;
+        //bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
+        BTRACE bhft::WebSocket ws("127.0.0.1", 8080, "", true);
+        BTRACE bhft::OutputMessage &message = ws.getOutputMessage();
+        BTRACE const auto p1 = std::chrono::system_clock::now();
+        BTRACE int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
                 p1.time_since_epoch()).count();
 
-        sprintf(buffer,
+        BTRACE sprintf(buffer,
                 R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
                 timestamp);
-        message.write(buffer);
-        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        ws.getMessage(buffer);
-        std::cout << "Login: " << buffer << std::endl;
+        BTRACE message.write(buffer);
+        BTRACE ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+        BTRACE ws.getMessage(buffer);
+        BTRACE std::cout << "Login: " << buffer << std::endl;
 
-        bhft::OutputMessage &message2 = ws.getOutputMessage();
-        message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
-        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        ws.getMessage(buffer);
+        BTRACE bhft::OutputMessage &message2 = ws.getOutputMessage();
+        BTRACE message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
+        BTRACE ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+        BTRACE ws.getMessage(buffer);
         std::cout << "Subscribe: " << buffer << std::endl;
 
         std::cout << "Connection started" << std::endl << std::endl;
-        while (!ws.isClosed()) {
-            ws.getMessage(buffer);
-            if (bparser_log) std::cout << "Arrived: " << buffer << std::endl << "";
-            parseQuote(&ws, buffer);
+        BTRACE while (!ws.isClosed()) {
+            BTRACE ws.getMessage(buffer);
+            BTRACE if (bparser_log) std::cout << "Arrived: " << buffer << std::endl << "";
+            BTRACE parseQuote(&ws, buffer);
         }
     }
 }
