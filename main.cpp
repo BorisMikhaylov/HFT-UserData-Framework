@@ -12,8 +12,8 @@
 bool bparser_log = false;
 
 struct InputData {
-    char *begin[6];
-    char *end[6];
+    const char *begin[6];
+    const char *end[6];
     int mask;
 
     void reset() {
@@ -41,7 +41,7 @@ namespace bparser {
 
         virtual ObjectCallback *willParseObject() = 0;
 
-        virtual void nextValue(char *begin, char *end) = 0;
+        virtual void nextValue(const char *begin, const char *end) = 0;
 
         virtual void arrayFinished() = 0;
     };
@@ -51,7 +51,7 @@ namespace bparser {
 
         explicit ObjectCallback(state *idMap) : idMap(idMap) {}
 
-        virtual void valueForField(int field_id, char *begin, char *end) = 0;
+        virtual void valueForField(int field_id, const char *begin, const char *end) = 0;
 
         virtual ObjectCallback *willParseObject(int field_id) = 0;
 
@@ -81,7 +81,7 @@ namespace bparser {
         }
     };
 
-    state *buildStateMachine(char **ids, int count) {
+    state *buildStateMachine(const char **ids, int count) {
         auto *unknownIdState = new state("unknownIdState", false, -1);
         auto *unknownIdFinalState = new state("unknownIdFinalState", true, -1);
         for (int i = 0; i < 256; ++i) {
@@ -90,7 +90,7 @@ namespace bparser {
         auto startState = new state("startState", false, -1, unknownIdState);
         startState->arr['"'] = unknownIdFinalState;
         for (int i = 0; i < count; ++i) {
-            char *ptr = *ids++;
+            const char *ptr = *ids++;
             auto current = startState;
             while (*ptr != 0) {
                 if (current->arr[*ptr] == unknownIdState) {
@@ -147,11 +147,11 @@ namespace bparser {
 
 
     struct input {
-        char *begin;
-        char *current;
-        char *end;
+        const char *begin;
+        const char *current;
+        const char *end;
 
-        explicit input(char *str) {
+        explicit input(const char *str) {
             begin = str;
             current = str;
             end = str + strlen(str);
@@ -245,9 +245,9 @@ namespace bparser {
                 } else if (*current != '[') {
                     if (parseArray(arr == nullptr ? nullptr : arr->willParseArray()) == -2) return -2;
                 } else {
-                    char *start = current;
+                    const char *start = current;
                     if (parseSimpleValue() == -2) return -2;
-                    char *finish = current;
+                    const char *finish = current;
                     if (arr != nullptr) arr->nextValue(start, finish);
                 }
                 if (skipSpaces() == -2) {
@@ -299,9 +299,9 @@ namespace bparser {
                 } else if (*current == '[') {
                     if (parseArray(obj == nullptr ? nullptr : obj->willParseArray(id)) == -2) return -2;
                 } else {
-                    char *start = current;
+                    const char *start = current;
                     if (parseSimpleValue() == -2) return -2;
-                    char *finish = current;
+                    const char *finish = current;
                     if (obj != nullptr) obj->valueForField(id, start, finish);
                 }
                 if (skipSpaces() == -2) {
@@ -318,7 +318,7 @@ namespace bparser {
 
 using namespace bparser;
 
-void checkSimpleValue(char *str, int result, int pos) {
+void checkSimpleValue(const char *str, int result, int pos) {
     input in(str);
     int res = in.parseSimpleValue();
     std::cout << str << ((result != res || in.begin + pos != in.current) ? ": error" : ": success")
@@ -337,7 +337,7 @@ void test_simple_value() {
 }
 
 void testIdentifier() {
-    char *ids[]{
+    const char *ids[]{
             "id", "29835", "lqknlenq", "e34e5r6t7yuijkj"
     };
     state *startState = buildStateMachine(ids, 4);
@@ -348,13 +348,13 @@ void testIdentifier() {
 
 }
 
-static char *dataObjectId[] = {"ordId",
+static const char *dataObjectId[] = {"ordId",
                                "side",
                                "px",
                                "sz",
                                "state",
                                "uTime"};
-static char *outputObjectId[] = {"\"orderId\"",
+static const char *outputObjectId[] = {"\"orderId\"",
                                  "\"side\"",
                                  "\"price\"",
                                  "\"volume\"",
@@ -374,7 +374,7 @@ struct DataObjectCallback : ObjectCallback {
         currentInput->reset();
     }
 
-    void valueForField(int fieldId, char *begin, char *end) override {
+    void valueForField(int fieldId, const char *begin, const char *end) override {
         if (fieldId < 0) return;
         if (fieldId == 0) {
             begin++;
@@ -416,7 +416,7 @@ struct DataArrayCallback : ArrayCallback {
         return &dataObjectCallback;
     }
 
-    void nextValue(char *begin, char *end) override {
+    void nextValue(const char *begin, const char *end) override {
 
     }
 
@@ -425,7 +425,7 @@ struct DataArrayCallback : ArrayCallback {
     }
 };
 
-static char *quoteObjectId[] = {"data"};
+static const char *quoteObjectId[] = {"data"};
 static state *quoteObjectIdMap = buildStateMachine(quoteObjectId, 1);
 
 struct QuoteObjectCallback : ObjectCallback {
@@ -434,7 +434,7 @@ struct QuoteObjectCallback : ObjectCallback {
     explicit QuoteObjectCallback(bhft::WebSocket *ws, InputDataSet &inputDataSet) : dataArrayCallback(ws, inputDataSet),
                                                                                     ObjectCallback(quoteObjectIdMap) {}
 
-    void valueForField(int field_id, char *begin, char *end) override {
+    void valueForField(int field_id, const char *begin, const char *end) override {
     }
 
     ObjectCallback *willParseObject(int fieldId) override {
