@@ -62,15 +62,15 @@ namespace bhft {
     }
 
     status Socket::write(const char *src, int count) {
-        while (count > 0) {
-            int ret = ::send(socket, src, count, 0);
-            if (ret < 0 && (socketerrno == SOCKET_EWOULDBLOCK || socketerrno == SOCKET_EAGAIN_EINPROGRESS)) {
-                continue;
+        BTRACE while (count > 0) {
+            BTRACE int ret = ::send(socket, src, count, 0);
+            BTRACE if (ret < 0 && (socketerrno == SOCKET_EWOULDBLOCK || socketerrno == SOCKET_EAGAIN_EINPROGRESS)) {
+                BTRACE continue;
             } else if (ret <= 0) {
-                return closed;
+                BTRACE return closed;
             }
-            count -= ret;
-            src += ret;
+            BTRACE count -= ret;
+            BTRACE src += ret;
         }
         return success;
     }
@@ -212,7 +212,7 @@ namespace bhft {
                 BTRACE header[4] = masking_key[2];
                 BTRACE header[5] = masking_key[3];
             }
-        } else BTRACE if (messageSize < 65536) {
+        } else if (messageSize < 65536) {
             BTRACE header[1] = 126 | (useMask ? 0x80 : 0);
             BTRACE header[2] = (messageSize >> 8) & 0xff;
             BTRACE header[3] = (messageSize >> 0) & 0xff;
