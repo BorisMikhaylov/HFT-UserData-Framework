@@ -196,58 +196,58 @@ namespace bhft {
     }
 
     status WebSocket::sendLastOutputMessage(wsheader_type::opcode_type type) {
-        const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
+        BTRACE const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
         //const uint8_t masking_key[4] = {0, 0, 0, 0};
         // TODO: consider acquiring a lock on txbuf...
-        int messageSize = outputMessage.end - outputMessage.begin;
+        BTRACE int messageSize = outputMessage.end - outputMessage.begin;
 
-        int headerSize = 2 + (messageSize >= 126 ? 2 : 0) + (messageSize >= 65536 ? 6 : 0) + (useMask ? 4 : 0);
-        uint8_t *header = reinterpret_cast<uint8_t *>(outputMessage.begin - headerSize);
-        header[0] = 0x80 | type;
-        if (messageSize < 126) {
-            header[1] = (messageSize & 0xff) | (useMask ? 0x80 : 0);
-            if (useMask) {
-                header[2] = masking_key[0];
-                header[3] = masking_key[1];
-                header[4] = masking_key[2];
-                header[5] = masking_key[3];
+        BTRACE int headerSize = 2 + (messageSize >= 126 ? 2 : 0) + (messageSize >= 65536 ? 6 : 0) + (useMask ? 4 : 0);
+        BTRACE uint8_t *header = reinterpret_cast<uint8_t *>(outputMessage.begin - headerSize);
+        BTRACE header[0] = 0x80 | type;
+        BTRACE if (messageSize < 126) {
+            BTRACE header[1] = (messageSize & 0xff) | (useMask ? 0x80 : 0);
+            BTRACE if (useMask) {
+                BTRACE header[2] = masking_key[0];
+                BTRACE header[3] = masking_key[1];
+                BTRACE header[4] = masking_key[2];
+                BTRACE header[5] = masking_key[3];
             }
-        } else if (messageSize < 65536) {
-            header[1] = 126 | (useMask ? 0x80 : 0);
-            header[2] = (messageSize >> 8) & 0xff;
-            header[3] = (messageSize >> 0) & 0xff;
-            if (useMask) {
-                header[4] = masking_key[0];
-                header[5] = masking_key[1];
-                header[6] = masking_key[2];
-                header[7] = masking_key[3];
+        } else BTRACE if (messageSize < 65536) {
+            BTRACE header[1] = 126 | (useMask ? 0x80 : 0);
+            BTRACE header[2] = (messageSize >> 8) & 0xff;
+            BTRACE header[3] = (messageSize >> 0) & 0xff;
+            BTRACE if (useMask) {
+                BTRACE header[4] = masking_key[0];
+                BTRACE header[5] = masking_key[1];
+                BTRACE header[6] = masking_key[2];
+                BTRACE header[7] = masking_key[3];
             }
         } else { // TODO: run coverage testing here
-            header[1] = 127 | (useMask ? 0x80 : 0);
-            header[2] = (messageSize >> 56) & 0xff;
-            header[3] = (messageSize >> 48) & 0xff;
-            header[4] = (messageSize >> 40) & 0xff;
-            header[5] = (messageSize >> 32) & 0xff;
-            header[6] = (messageSize >> 24) & 0xff;
-            header[7] = (messageSize >> 16) & 0xff;
-            header[8] = (messageSize >> 8) & 0xff;
-            header[9] = (messageSize >> 0) & 0xff;
-            if (useMask) {
-                header[10] = masking_key[0];
-                header[11] = masking_key[1];
-                header[12] = masking_key[2];
-                header[13] = masking_key[3];
+            BTRACE header[1] = 127 | (useMask ? 0x80 : 0);
+            BTRACE header[2] = (messageSize >> 56) & 0xff;
+            BTRACE header[3] = (messageSize >> 48) & 0xff;
+            BTRACE header[4] = (messageSize >> 40) & 0xff;
+            BTRACE header[5] = (messageSize >> 32) & 0xff;
+            BTRACE header[6] = (messageSize >> 24) & 0xff;
+            BTRACE header[7] = (messageSize >> 16) & 0xff;
+            BTRACE header[8] = (messageSize >> 8) & 0xff;
+            BTRACE header[9] = (messageSize >> 0) & 0xff;
+            BTRACE if (useMask) {
+                BTRACE header[10] = masking_key[0];
+                BTRACE header[11] = masking_key[1];
+                BTRACE header[12] = masking_key[2];
+                BTRACE header[13] = masking_key[3];
             }
         }
         // N.B. - txbuf will keep growing until it can be transmitted over the socket:
-        if (useMask) {
+        BTRACE if (useMask) {
 // could be omitted when masking key is zeros
-            for (size_t i = 0; i != messageSize; ++i) {
-                outputMessage.begin[i] ^= masking_key[i & 0x3];
+            BTRACE for (size_t i = 0; i != messageSize; ++i) {
+                BTRACE outputMessage.begin[i] ^= masking_key[i & 0x3];
             }
 
         }
-        socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
+        BTRACE socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
     }
 
     OutputMessage &WebSocket::getOutputMessage() {
