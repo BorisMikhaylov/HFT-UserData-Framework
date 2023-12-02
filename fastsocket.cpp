@@ -81,7 +81,7 @@ namespace bhft {
             return;
         }
         char buffer[4096];
-        char *format = "GET /%s HTTP/1.1\r\nHost: %s:%i\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
+        const char *format = "GET /%s HTTP/1.1\r\nHost: %s:%i\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n";
         sprintf(buffer, format, path.c_str(), hostname.c_str(), port);
         socket.write(buffer, strlen(buffer));
         while (strlen(buffer) > 0) {
@@ -200,10 +200,10 @@ namespace bhft {
         const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
         //cont uint8_t masking_key[4] = {0, 0, 0, 0};
         // TODO: consider acquiring a lock on txbuf...
-        int messageSize = outputMessage.end - outputMessage.begin;
+        size_t messageSize = outputMessage.end - outputMessage.begin;
 
         int headerSize = 2 + (messageSize >= 126 ? 2 : 0) + (messageSize >= 65536 ? 6 : 0) + (useMask ? 4 : 0);
-        uint8_t *header = reinterpret_cast<uint8_t *>(outputMessage.begin - headerSize);
+        auto *header = reinterpret_cast<uint8_t *>(outputMessage.begin - headerSize);
         header[0] = 0x80 | type;
         if (messageSize < 126) {
             header[1] = (messageSize & 0xff) | (useMask ? 0x80 : 0);

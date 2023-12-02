@@ -341,7 +341,7 @@ void testIdentifier() {
             "id", "29835", "lqknlenq", "e34e5r6t7yuijkj"
     };
     state *startState = buildStateMachine(ids, 4);
-    char *str = R"(
+    const char *str = R"(
  "lqknlenq"  )";
     input in(str);
     std::cout << in.parseIdentifier(startState);
