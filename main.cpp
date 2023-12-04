@@ -506,7 +506,7 @@ int main(int argc, char **argv) {
         while (!ws.isClosed()) {
             bhft::Message inMessage(buffer+1);
             ws.getMessage(inMessage);
-            if (bparser_log) std::cout << "Arrived: " << buffer << std::endl << "";
+            if (bparser_log) std::cout << "Arrived: " << buffer+1 << std::endl << "";
             if (inMessage.begin == inMessage.end) continue;
             if (*inMessage.begin != '{') *--inMessage.begin = '{';
             if (inMessage.end[-1] != '}') *inMessage.end++ = '}';
