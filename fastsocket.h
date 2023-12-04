@@ -111,6 +111,14 @@ namespace bhft {
         }
     };
 
+    struct Message{
+        char* begin;
+        char* end;
+
+        explicit Message(char *begin);
+
+    };
+
     struct WebSocket {
         Socket socket;
         bool useMask;
@@ -124,7 +132,7 @@ namespace bhft {
             return socket.isClosed();
         }
 
-        status getMessage(char *dst);
+        status getMessage(Message& message);
 
         OutputMessage &getOutputMessage();
 

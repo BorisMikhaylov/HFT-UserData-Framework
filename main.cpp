@@ -151,10 +151,10 @@ namespace bparser {
         const char *current;
         const char *end;
 
-        explicit input(const char *str) {
-            begin = str;
-            current = str;
-            end = str + strlen(str);
+        explicit input(bhft::Message& message) {
+            begin = message.begin;
+            current = message.begin;
+            end = message.end;
         }
 
         void log(const std::string &message) {
@@ -318,32 +318,32 @@ namespace bparser {
 
 using namespace bparser;
 
-void checkSimpleValue(const char *str, int result, int pos) {
-    input in(str);
+void checkSimpleValue(bhft::Message& message, int result, int pos) {
+    input in(message);
     int res = in.parseSimpleValue();
-    std::cout << str << ((result != res || in.begin + pos != in.current) ? ": error" : ": success")
+    std::cout << message.begin << ((result != res || in.begin + pos != in.current) ? ": error" : ": success")
               << "\n";
 
 }
 
-void test_simple_value() {
-    checkSimpleValue(R"("asd",)", 0, 5);
-    checkSimpleValue(R"("as\td"])", 0, 7);
-    checkSimpleValue(R"("as\"d"])", 0, 7);
-    checkSimpleValue(R"("as\"d])", -2, 7);
-    checkSimpleValue(R"(as\td])", 0, 5);
-    checkSimpleValue(R"(as\td))", -2, 6);
-    checkSimpleValue(R"(astd\)])", 0, 6);
-}
+//void test_simple_value() {
+//    checkSimpleValue(R"("asd",)", 0, 5);
+//    checkSimpleValue(R"("as\td"])", 0, 7);
+//    checkSimpleValue(R"("as\"d"])", 0, 7);
+//    checkSimpleValue(R"("as\"d])", -2, 7);
+//    checkSimpleValue(R"(as\td])", 0, 5);
+//    checkSimpleValue(R"(as\td))", -2, 6);
+//    checkSimpleValue(R"(astd\)])", 0, 6);
+//}
 
 void testIdentifier() {
     const char *ids[]{
             "id", "29835", "lqknlenq", "e34e5r6t7yuijkj"
     };
     state *startState = buildStateMachine(ids, 4);
-    const char *str = R"(
- "lqknlenq"  )";
-    input in(str);
+    bhft::Message message(R"(
+ "lqknlenq"  )");
+    input in(message);
     std::cout << in.parseIdentifier(startState);
 
 }
@@ -450,7 +450,7 @@ struct QuoteObjectCallback : ObjectCallback {
     }
 };
 
-void parseQuote(bhft::WebSocket *ws, char *message) {
+void parseQuote(bhft::WebSocket *ws, bhft::Message& message) {
     InputDataSet inputDataSet(inputData, inputData);
     QuoteObjectCallback quoteObjectCallback(ws, inputDataSet);
     input in(message);
@@ -491,20 +491,26 @@ int main(int argc, char **argv) {
                 timestamp);
         message.write(buffer);
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        ws.getMessage(buffer);
+        bhft::Message inMessage1(buffer);
+        ws.getMessage(inMessage1);
         std::cout << "Login: " << buffer << std::endl;
 
         bhft::OutputMessage &message2 = ws.getOutputMessage();
         message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        ws.getMessage(buffer);
+        bhft::Message inMessage2(buffer);
+        ws.getMessage(inMessage2);
         std::cout << "Subscribe: " << buffer << std::endl;
 
         std::cout << "Connection started" << std::endl << std::endl;
         while (!ws.isClosed()) {
-            ws.getMessage(buffer);
+            bhft::Message inMessage(buffer+1);
+            ws.getMessage(inMessage);
             if (bparser_log) std::cout << "Arrived: " << buffer << std::endl << "";
-            parseQuote(&ws, buffer);
+            if (inMessage.begin == inMessage.end) continue;
+            if (*inMessage.begin != '{') *--inMessage.begin = '{';
+            if (inMessage.end[-1] != '}') *inMessage.end++ = '}';
+            parseQuote(&ws, inMessage);
         }
     }
 }

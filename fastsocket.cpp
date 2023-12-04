@@ -110,7 +110,7 @@ namespace bhft {
         return success;
     }
 
-    status WebSocket::getMessage(char *dst) {
+    status WebSocket::getMessage(Message& message) {
         wsheader_type ws;
         do {
             char header[16];
@@ -172,27 +172,27 @@ namespace bhft {
                     || ws.opcode == wsheader_type::BINARY_FRAME
                     || ws.opcode == wsheader_type::CONTINUATION
                     ) {
-                if (socket.read(dst, ws.N) == closed) return closed;
+                if (socket.read(message.end, ws.N) == closed) return closed;
                 if (ws.mask) {
                     for (size_t i = 0; i != ws.N; ++i) {
-                        dst[i] ^= ws.masking_key[i & 0x3];
+                        message.end[i] ^= ws.masking_key[i & 0x3];
                     }
                 }
-                dst += ws.N;
+                message.end += ws.N;
             } else if (ws.opcode == wsheader_type::PING) {
-                if (socket.read(dst, ws.N) == closed) return closed;
-                getOutputMessage().write(dst, dst + ws.N);
+                if (socket.read(message.end, ws.N) == closed) return closed;
+                getOutputMessage().write(message.end, message.end + ws.N);
                 sendLastOutputMessage(wsheader_type::PONG);
                 continue;
             } else if (ws.opcode == wsheader_type::PONG) {
-                if (socket.read(dst, ws.N) == closed) return closed;
+                if (socket.read(message.end, ws.N) == closed) return closed;
                 continue;
             } else {
                 socket.socketClosed = true;
                 return closed;
             }
         } while (!ws.fin);
-        *dst = 0;
+        *message.end = 0;
         return success;
     }
 
@@ -256,4 +256,5 @@ namespace bhft {
         return outputMessage;
     }
 
+    Message::Message(char *begin) : begin(begin), end(begin) {}
 } // bhft
