@@ -243,8 +243,9 @@ namespace bhft {
         // N.B. - txbuf will keep growing until it can be transmitted over the socket:
         if (useMask) {
 // could be omitted when masking key is zeros
-            for (size_t i = 0; i != messageSize; ++i) {
-                outputMessage.begin[i] ^= masking_key[i & 0x3];
+            auto m = *(unsigned int *) masking_key;
+            for (size_t i = 0; i < messageSize; i+=sizeof(unsigned)) {
+                *(unsigned int*)(outputMessage.begin+i) ^= m;
             }
 
         }

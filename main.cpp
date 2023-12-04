@@ -151,7 +151,7 @@ namespace bparser {
         const char *current;
         const char *end;
 
-        explicit input(bhft::Message& message) {
+        explicit input(bhft::Message &message) {
             begin = message.begin;
             current = message.begin;
             end = message.end;
@@ -318,7 +318,7 @@ namespace bparser {
 
 using namespace bparser;
 
-void checkSimpleValue(bhft::Message& message, int result, int pos) {
+void checkSimpleValue(bhft::Message &message, int result, int pos) {
     input in(message);
     int res = in.parseSimpleValue();
     std::cout << message.begin << ((result != res || in.begin + pos != in.current) ? ": error" : ": success")
@@ -341,7 +341,7 @@ void testIdentifier() {
             "id", "29835", "lqknlenq", "e34e5r6t7yuijkj"
     };
     state *startState = buildStateMachine(ids, 4);
-    bhft::Message message(R"(
+    bhft::Message message((char *) R"(
  "lqknlenq"  )");
     input in(message);
     std::cout << in.parseIdentifier(startState);
@@ -349,17 +349,17 @@ void testIdentifier() {
 }
 
 static const char *dataObjectId[] = {"ordId",
-                               "side",
-                               "px",
-                               "sz",
-                               "state",
-                               "uTime"};
+                                     "side",
+                                     "px",
+                                     "sz",
+                                     "state",
+                                     "uTime"};
 static const char *outputObjectId[] = {"\"orderId\"",
-                                 "\"side\"",
-                                 "\"price\"",
-                                 "\"volume\"",
-                                 "\"state\"",
-                                 "\"uTime\""};
+                                       "\"side\"",
+                                       "\"price\"",
+                                       "\"volume\"",
+                                       "\"state\"",
+                                       "\"uTime\""};
 
 static state *dataObjectIdMap = buildStateMachine(dataObjectId, 6);
 
@@ -450,7 +450,7 @@ struct QuoteObjectCallback : ObjectCallback {
     }
 };
 
-void parseQuote(bhft::WebSocket *ws, bhft::Message& message) {
+void parseQuote(bhft::WebSocket *ws, bhft::Message &message) {
     InputDataSet inputDataSet(inputData, inputData);
     QuoteObjectCallback quoteObjectCallback(ws, inputDataSet);
     input in(message);
@@ -459,7 +459,7 @@ void parseQuote(bhft::WebSocket *ws, bhft::Message& message) {
         auto &out = ws->getOutputMessage();
         char prefix = '{';
         for (int i = 0; i < 6; ++i) {
-            if ((input->mask >> i) & 1){
+            if ((input->mask >> i) & 1) {
                 out.write(prefix);
                 prefix = ',';
                 out.write(outputObjectId[i]);
@@ -504,9 +504,9 @@ int main(int argc, char **argv) {
 
         std::cout << "Connection started" << std::endl << std::endl;
         while (!ws.isClosed()) {
-            bhft::Message inMessage(buffer+1);
+            bhft::Message inMessage(buffer + 1);
             ws.getMessage(inMessage);
-            if (bparser_log) std::cout << "Arrived: " << buffer+1 << std::endl << "";
+            if (bparser_log) std::cout << "Arrived: " << buffer + 1 << std::endl << "";
             if (inMessage.begin == inMessage.end) continue;
             if (*inMessage.begin != '{') *--inMessage.begin = '{';
             if (inMessage.end[-1] != '}') *inMessage.end++ = '}';
