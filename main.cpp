@@ -1,4 +1,3 @@
-#include "easywsclient.hpp"
 #include <iostream>
 #include <string>
 #include <memory>
@@ -99,7 +98,7 @@ namespace bparser {
                     newNode->arr['"'] = unknownIdFinalState;
                 }
                 current = current->arr[*ptr];
-                ptr++;
+                ++ptr;
             }
             current->arr['"'] = new state("end of field", true, i);
         }
@@ -171,7 +170,7 @@ namespace bparser {
 
         int skipSpaces() {
             while (current != end && is_whitespace(*current)) {
-                current++;
+                ++current;
             }
             return (current == end) ? -2 : 0;
         }
@@ -276,7 +275,7 @@ namespace bparser {
                 return -2;
             }
             if (*current == '}') {
-                current++;
+                ++current;
                 return 0;
             }
             do {
@@ -377,8 +376,8 @@ struct DataObjectCallback : ObjectCallback {
     void valueForField(int fieldId, const char *begin, const char *end) override {
         if (fieldId < 0) return;
         if (fieldId == 0) {
-            begin++;
-            end--;
+            ++begin;
+            --end;
         }
         currentInput->begin[fieldId] = begin;
         currentInput->end[fieldId] = end;
