@@ -39,8 +39,9 @@ namespace bhft {
     }
 
     status Socket::read(char *dst, size_t count) {
-        while (begin != end && count-- > 0) {
+        while (begin != end && count > 0) {
             *dst++ = *begin++;
+            --count;
         }
         if (count == 0) return success;
         while (count > 0) {
@@ -54,8 +55,9 @@ namespace bhft {
             }
             begin = readBuffer;
             end = begin + cntReadBytes;
-            while (begin != end && count-- > 0) {
+            while (begin != end && count > 0) {
                 *dst++ = *begin++;
+                --count;
             }
         }
         return success;
