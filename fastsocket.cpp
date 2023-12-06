@@ -38,7 +38,7 @@ namespace bhft {
         closesocket(socket);
     }
 
-    status Socket::read(char *dst, int count) {
+    status Socket::read(char *dst, size_t count) {
         while (begin != end && count-- > 0) {
             *dst++ = *begin++;
         }
@@ -57,6 +57,41 @@ namespace bhft {
             while (begin != end && count-- > 0) {
                 *dst++ = *begin++;
             }
+        }
+        return success;
+    }
+
+    void bcopy(char *dst, const char *src, size_t count, uint8_t *mask, int index) {
+        while (count--) {
+            *dst++ = *src++ ^ mask[(index++) & 3];
+        }
+    }
+
+    status Socket::read(char *dst, size_t count, uint8_t *mask) {
+        size_t cnt = std::min((size_t) (end - begin), count);
+        bcopy(dst, begin, cnt, mask, 0);
+        count -= cnt;
+        dst += cnt;
+        begin += cnt;
+        if (count == 0) return success;
+        int index = cnt & 3;
+        while (count > 0) {
+            ssize_t cntReadBytes = recv(socket, readBuffer, sizeof readBuffer, 0);
+            if (cntReadBytes < 0 && (socketerrno == SOCKET_EWOULDBLOCK || socketerrno == SOCKET_EAGAIN_EINPROGRESS)) {
+                //TODO wait for data and PING if there's no data
+                continue;
+            } else if (cntReadBytes <= 0) {
+                socketClosed = true;
+                return closed;
+            }
+            begin = readBuffer;
+            end = begin + cntReadBytes;
+            cnt = std::min((size_t) (end - begin), count);
+            bcopy(dst, begin, cnt, mask, index);
+            index += cnt;
+            count -= cnt;
+            dst += cnt;
+            begin += cnt;
         }
         return success;
     }
@@ -110,7 +145,7 @@ namespace bhft {
         return success;
     }
 
-    status WebSocket::getMessage(Message& message) {
+    status WebSocket::getMessage(Message &message) {
         wsheader_type ws;
         do {
             char header[16];
@@ -172,11 +207,10 @@ namespace bhft {
                     || ws.opcode == wsheader_type::BINARY_FRAME
                     || ws.opcode == wsheader_type::CONTINUATION
                     ) {
-                if (socket.read(message.end, ws.N) == closed) return closed;
                 if (ws.mask) {
-                    for (size_t i = 0; i != ws.N; ++i) {
-                        message.end[i] ^= ws.masking_key[i & 0x3];
-                    }
+                    if (socket.read(message.end, ws.N, ws.masking_key) == closed) return closed;
+                } else {
+                    if (socket.read(message.end, ws.N) == closed) return closed;
                 }
                 message.end += ws.N;
             } else if (ws.opcode == wsheader_type::PING) {
@@ -244,8 +278,8 @@ namespace bhft {
         if (useMask) {
 // could be omitted when masking key is zeros
             auto m = *(unsigned int *) masking_key;
-            for (size_t i = 0; i < messageSize; i+=sizeof(unsigned)) {
-                *(unsigned int*)(outputMessage.begin+i) ^= m;
+            for (size_t i = 0; i < messageSize; i += sizeof(unsigned)) {
+                *(unsigned int *) (outputMessage.begin + i) ^= m;
             }
 
         }

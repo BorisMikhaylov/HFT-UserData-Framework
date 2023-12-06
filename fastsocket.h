@@ -71,7 +71,7 @@ namespace bhft {
         socket_t socket;
         bool socketClosed;
 
-        status read(char *dst, int count);
+        status read(char *dst, size_t count);
 
         status write(const char *src, int count);
 
@@ -82,6 +82,8 @@ namespace bhft {
         bool isClosed() {
             return socketClosed;
         }
+
+        status read(char *dst, size_t count, uint8_t *mask);
     };
 
     struct OutputMessage {
