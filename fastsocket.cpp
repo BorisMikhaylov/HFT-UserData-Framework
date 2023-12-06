@@ -63,9 +63,20 @@ namespace bhft {
         return success;
     }
 
-    void bcopy(char *dst, const char *src, size_t count, uint8_t *mask, int index) {
-        while (count--) {
-            *dst++ = *src++ ^ mask[(index++) & 3];
+    void bcopy(char *dst, const char *src, int count, uint8_t *mask, int index) {
+        if (count < 20) {
+            while (count--) {
+                *dst++ = *src++ ^ mask[(index++) & 3];
+            }
+        }
+        uint64_t m = *(uint32_t *) mask;
+        m |= m << 32;
+        m = *(uint32_t *) (((uint8_t *) &m) + (index & 3));
+        m |= m << 32;
+        uint64_t *d = (uint64_t *) dst;
+        uint64_t *s = (uint64_t *) src;
+        for (; count > 0; count -= 8) {
+            *d++ = *s++ ^ m;
         }
     }
 
