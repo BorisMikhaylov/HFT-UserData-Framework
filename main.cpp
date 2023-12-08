@@ -496,17 +496,18 @@ int main(int argc, char **argv) {
 
         bhft::OutputMessage &message2 = ws.getOutputMessage();
         message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
+        //message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP"}]})");
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         bhft::Message inMessage2(buffer);
         ws.getMessage(inMessage2);
         std::cout << "Subscribe: " << buffer << std::endl;
         std::cout << "Connection started" << std::endl << std::endl;
-
         int counter = 0;
         while (!ws.isClosed()) {
-            if (counter == 1000) {
-                std::cout << "Still running: " << std::chrono::duration_cast<std::chrono::seconds>(
-                        p1.time_since_epoch()).count() << std::endl;
+            if (counter == 100) {
+                auto cur_time = std::chrono::system_clock::now();
+                std::time_t end_time = std::chrono::system_clock::to_time_t(cur_time);
+                std::cout << "Still running: " << std::ctime(&end_time) << std::endl;
                 counter = 0;
             }
             counter++;
