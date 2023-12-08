@@ -512,8 +512,11 @@ int main(int argc, char **argv) {
             const auto pPong = std::chrono::system_clock::now();
             uint64_t timestampPong = std::chrono::duration_cast<std::chrono::microseconds>(
                     pPong.time_since_epoch()).count();
-            std::cout << "PING" << "\t" << timestampPong - timestampPing << std::endl;
+            delay += timestampPong - timestampPing;
+            //std::cout << "PING" << "\t" << timestampPong - timestampPing << std::endl;
         }
+        std::cout << "Delay:\t" << delay * 1.0 / 1000 << std::endl;
+        continue;
         bhft::OutputMessage &message = ws.getOutputMessage();
         const auto p1 = std::chrono::system_clock::now();
         int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
