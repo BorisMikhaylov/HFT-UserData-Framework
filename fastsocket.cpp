@@ -165,7 +165,7 @@ namespace bhft {
         return success;
     }
 
-    status WebSocket::getMessage(Message &message) {
+    status WebSocket::getMessage(Message &message, bool returnOnPong) {
         wsheader_type ws;
         do {
             char header[16];
@@ -240,6 +240,7 @@ namespace bhft {
                 continue;
             } else if (ws.opcode == wsheader_type::PONG) {
                 if (socket.read(message.end, ws.N) == closed) return closed;
+                if (returnOnPong) return success;
                 continue;
             } else {
                 socket.socketClosed = true;

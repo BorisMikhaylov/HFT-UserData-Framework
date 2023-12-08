@@ -134,7 +134,7 @@ namespace bhft {
             return socket.isClosed();
         }
 
-        status getMessage(Message& message);
+        status getMessage(Message& message, bool returnOnPong = false);
 
         OutputMessage &getOutputMessage();
 

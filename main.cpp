@@ -373,6 +373,17 @@ struct DataObjectCallback : ObjectCallback {
         currentInput->reset();
     }
 
+    uint64_t ctol(const char *str_begin, const char *str_end) {
+        uint64_t ans = 0;
+        ++str_begin;
+        --str_end;
+        while (str_begin != str_end) {
+            ans *= 10;
+            ans += (*str_begin++) - '0';
+        }
+        return ans;
+    }
+
     void valueForField(int fieldId, const char *begin, const char *end) override {
         if (fieldId < 0) return;
         if (fieldId == 0) {
@@ -382,6 +393,13 @@ struct DataObjectCallback : ObjectCallback {
         currentInput->begin[fieldId] = begin;
         currentInput->end[fieldId] = end;
         currentInput->mask |= 1 << fieldId;
+        if (fieldId == 5) {
+            const auto p1 = std::chrono::system_clock::now();
+            int64_t timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    p1.time_since_epoch()).count();
+            int64_t messageTimestamp = ctol(begin, end);
+            std::cout << timestamp << "\t" << messageTimestamp << "\t" << messageTimestamp - timestamp << std::endl;
+        }
     }
 
     ObjectCallback *willParseObject(int field_id) override {
@@ -480,6 +498,22 @@ int main(int argc, char **argv) {
         std::cout << "Connection starting..." << std::endl << std::endl;
         bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
         //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
+
+        uint64_t delay = 0;
+        for (int i = 0; i < 1000; ++i) {
+            auto pingMessage = ws.getOutputMessage();
+            bhft::Message pongMessage(buffer);
+            pingMessage.write("ewe");
+            const auto pPing = std::chrono::system_clock::now();
+            uint64_t timestampPing = std::chrono::duration_cast<std::chrono::microseconds>(
+                    pPing.time_since_epoch()).count();
+            ws.sendLastOutputMessage(bhft::wsheader_type::PING);
+            ws.getMessage(pongMessage, true);
+            const auto pPong = std::chrono::system_clock::now();
+            uint64_t timestampPong = std::chrono::duration_cast<std::chrono::microseconds>(
+                    pPong.time_since_epoch()).count();
+            std::cout << "PING" << "\t" << timestampPong - timestampPing << std::endl;
+        }
         bhft::OutputMessage &message = ws.getOutputMessage();
         const auto p1 = std::chrono::system_clock::now();
         int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
@@ -495,7 +529,8 @@ int main(int argc, char **argv) {
         std::cout << "Login: " << buffer << std::endl;
 
         bhft::OutputMessage &message2 = ws.getOutputMessage();
-        message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP", "instType":"SWAP"}]})");
+        message2.write(
+                R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP", "instType":"SWAP"}]})");
         //message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP"}]})");
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         bhft::Message inMessage2(buffer);
@@ -513,6 +548,7 @@ int main(int argc, char **argv) {
             counter++;
             bhft::Message inMessage(buffer + 1);
             ws.getMessage(inMessage);
+
             if (bparser_log) std::cout << "Arrived: " << buffer + 1 << std::endl << "";
             if (inMessage.begin == inMessage.end) continue;
             if (*inMessage.begin != '{') *--inMessage.begin = '{';
