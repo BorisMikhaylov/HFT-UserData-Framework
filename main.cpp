@@ -500,9 +500,16 @@ int main(int argc, char **argv) {
         bhft::Message inMessage2(buffer);
         ws.getMessage(inMessage2);
         std::cout << "Subscribe: " << buffer << std::endl;
-
         std::cout << "Connection started" << std::endl << std::endl;
+
+        int counter = 0;
         while (!ws.isClosed()) {
+            if (counter == 1000) {
+                std::cout << "Still running: " << std::chrono::duration_cast<std::chrono::seconds>(
+                        p1.time_since_epoch()).count() << std::endl;
+                counter = 0;
+            }
+            counter++;
             bhft::Message inMessage(buffer + 1);
             ws.getMessage(inMessage);
             if (bparser_log) std::cout << "Arrived: " << buffer + 1 << std::endl << "";

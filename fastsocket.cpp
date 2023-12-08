@@ -45,7 +45,7 @@ namespace bhft {
         }
         if (count == 0) return success;
         while (count > 0) {
-            ssize_t cntReadBytes = recv(socket, readBuffer, sizeof readBuffer, 0);
+            ssize_t cntReadBytes = recv(socket, readBuffer, sizeof(readBuffer) - 8, 0);
             if (cntReadBytes < 0 && (socketerrno == SOCKET_EWOULDBLOCK || socketerrno == SOCKET_EAGAIN_EINPROGRESS)) {
                 //TODO wait for data and PING if there's no data
                 continue;
@@ -68,13 +68,16 @@ namespace bhft {
             while (count--) {
                 *dst++ = *src++ ^ mask[(index++) & 3];
             }
+            return;
+        }
+        while (index & 3) {
+            *dst++ = *src++ ^ mask[(index++) & 3];
+            count--;
         }
         uint64_t m = *(uint32_t *) mask;
         m |= m << 32;
-        m = *(uint32_t *) (((uint8_t *) &m) + (index & 3));
-        m |= m << 32;
-        uint64_t *d = (uint64_t *) dst;
-        uint64_t *s = (uint64_t *) src;
+        auto *d = (uint64_t *) dst;
+        auto *s = (uint64_t *) src;
         for (; count > 0; count -= 8) {
             *d++ = *s++ ^ m;
         }
@@ -89,7 +92,7 @@ namespace bhft {
         if (count == 0) return success;
         int index = cnt & 3;
         while (count > 0) {
-            ssize_t cntReadBytes = recv(socket, readBuffer, sizeof readBuffer, 0);
+            ssize_t cntReadBytes = recv(socket, readBuffer, sizeof(readBuffer) - 8, 0);
             if (cntReadBytes < 0 && (socketerrno == SOCKET_EWOULDBLOCK || socketerrno == SOCKET_EAGAIN_EINPROGRESS)) {
                 //TODO wait for data and PING if there's no data
                 continue;
@@ -141,6 +144,10 @@ namespace bhft {
         int flag = 1;
         ::setsockopt(socket.socket, IPPROTO_TCP, TCP_NODELAY, (char *) &flag,
                      sizeof(flag)); // Disable Nagle's algorithm
+        int readSize = 8192;
+        int writeSize = 8192;
+        ::setsockopt(socket.socket, SOL_SOCKET, SO_RCVBUF, &readSize, sizeof(readSize));
+        ::setsockopt(socket.socket, SOL_SOCKET, SO_SNDBUF, &writeSize, sizeof(writeSize));
         ::fcntl(socket.socket, F_SETFL, O_NONBLOCK);
     }
 
@@ -244,8 +251,8 @@ namespace bhft {
     }
 
     status WebSocket::sendLastOutputMessage(wsheader_type::opcode_type type) {
-        const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
-        //cont uint8_t masking_key[4] = {0, 0, 0, 0};
+        //const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
+        const uint8_t masking_key[4] = {0, 0, 0, 0};
         // TODO: consider acquiring a lock on txbuf...
         size_t messageSize = outputMessage.end - outputMessage.begin;
 
@@ -288,14 +295,14 @@ namespace bhft {
             }
         }
         // N.B. - txbuf will keep growing until it can be transmitted over the socket:
-        if (useMask) {
-// could be omitted when masking key is zeros
-            auto m = *(unsigned int *) masking_key;
-            for (size_t i = 0; i < messageSize; i += sizeof(unsigned)) {
-                *(unsigned int *) (outputMessage.begin + i) ^= m;
-            }
-
-        }
+//        if (useMask) {
+//// could be omitted when masking key is zeros
+//            auto m = *(unsigned int *) masking_key;
+//            for (size_t i = 0; i < messageSize; i += sizeof(unsigned)) {
+//                *(unsigned int *) (outputMessage.begin + i) ^= m;
+//            }
+//
+//        }
         return socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
     }
 

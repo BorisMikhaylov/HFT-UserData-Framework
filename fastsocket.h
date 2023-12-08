@@ -65,7 +65,7 @@ namespace bhft {
     };
 
     struct Socket {
-        char readBuffer[1024];
+        char readBuffer[1508];
         char *begin;
         char *end;
         socket_t socket;
