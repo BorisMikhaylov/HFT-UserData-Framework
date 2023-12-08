@@ -492,31 +492,46 @@ void parseQuote(bhft::WebSocket *ws, bhft::Message &message) {
 
 static char buffer[10000000];
 
+uint64_t getDelay(bhft::WebSocket &ws) {
+    const int iterations = 10000;
+    uint64_t delay = 0;
+    for (int i = 0; i < iterations; ++i) {
+        auto pingMessage = ws.getOutputMessage();
+        bhft::Message pongMessage(buffer);
+        pingMessage.write("ewe");
+        const auto pPing = std::chrono::system_clock::now();
+        uint64_t timestampPing = std::chrono::duration_cast<std::chrono::microseconds>(
+                pPing.time_since_epoch()).count();
+        ws.sendLastOutputMessage(bhft::wsheader_type::PING);
+        ws.getMessage(pongMessage, true);
+        const auto pPong = std::chrono::system_clock::now();
+        uint64_t timestampPong = std::chrono::duration_cast<std::chrono::microseconds>(
+                pPong.time_since_epoch()).count();
+        delay += timestampPong - timestampPing;
+        //std::cout << "PING" << "\t" << timestampPong - timestampPing << std::endl;
+    }
+    return delay;
+}
+
 int main(int argc, char **argv) {
+    uint64_t bestDelay = 10000000;
     if (argc > 1) bparser_log = true;
+    uint64_t numIter = 0;
     while (true) {
-        std::cout << "Connection starting..." << std::endl << std::endl;
+        ++numIter;
         bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
         //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
 
-        uint64_t delay = 0;
-        for (int i = 0; i < 1000; ++i) {
-            auto pingMessage = ws.getOutputMessage();
-            bhft::Message pongMessage(buffer);
-            pingMessage.write("ewe");
-            const auto pPing = std::chrono::system_clock::now();
-            uint64_t timestampPing = std::chrono::duration_cast<std::chrono::microseconds>(
-                    pPing.time_since_epoch()).count();
-            ws.sendLastOutputMessage(bhft::wsheader_type::PING);
-            ws.getMessage(pongMessage, true);
-            const auto pPong = std::chrono::system_clock::now();
-            uint64_t timestampPong = std::chrono::duration_cast<std::chrono::microseconds>(
-                    pPong.time_since_epoch()).count();
-            delay += timestampPong - timestampPing;
-            //std::cout << "PING" << "\t" << timestampPong - timestampPing << std::endl;
+        uint64_t delay = getDelay(ws);
+        std::cout << "Delay:\t" << delay * 1.0 / 10000 << std::endl;
+        if (delay >= bestDelay) continue;
+        if (numIter < 100) {
+            bestDelay = delay;
+            continue;
         }
-        std::cout << "Delay:\t" << delay * 1.0 / 1000 << std::endl;
-        continue;
+
+
+        std::cout << "Connection starting..." << std::endl << std::endl;
         bhft::OutputMessage &message = ws.getOutputMessage();
         const auto p1 = std::chrono::system_clock::now();
         int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
