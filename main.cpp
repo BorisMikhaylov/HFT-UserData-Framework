@@ -393,13 +393,6 @@ struct DataObjectCallback : ObjectCallback {
         currentInput->begin[fieldId] = begin;
         currentInput->end[fieldId] = end;
         currentInput->mask |= 1 << fieldId;
-        if (fieldId == 5) {
-            const auto p1 = std::chrono::system_clock::now();
-            int64_t timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    p1.time_since_epoch()).count();
-            int64_t messageTimestamp = ctol(begin, end);
-            std::cout << timestamp << "\t" << messageTimestamp << "\t" << messageTimestamp - timestamp << std::endl;
-        }
     }
 
     ObjectCallback *willParseObject(int field_id) override {
@@ -529,7 +522,6 @@ int main(int argc, char **argv) {
             bestDelay = delay;
             continue;
         }
-
 
         std::cout << "Connection starting..." << std::endl << std::endl;
         bhft::OutputMessage &message = ws.getOutputMessage();
