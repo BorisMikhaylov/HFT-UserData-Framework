@@ -495,7 +495,7 @@ int main(int argc, char **argv) {
         std::cout << "Login: " << buffer << std::endl;
 
         bhft::OutputMessage &message2 = ws.getOutputMessage();
-        message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instType":"ANY"}]})");
+        message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP"}]})");
         //message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP"}]})");
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         bhft::Message inMessage2(buffer);
