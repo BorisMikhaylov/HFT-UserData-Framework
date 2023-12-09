@@ -485,22 +485,40 @@ void parseQuote(bhft::WebSocket *ws, bhft::Message &message) {
 
 static char buffer[10000000];
 
+struct TimeMeasurer {
+    uint64_t currentTime;
+
+    TimeMeasurer() {
+        const auto p = std::chrono::system_clock::now();
+        currentTime = std::chrono::duration_cast<std::chrono::microseconds>(
+                p.time_since_epoch()).count();
+    }
+
+    void reset() {
+        const auto p = std::chrono::system_clock::now();
+        currentTime = std::chrono::duration_cast<std::chrono::microseconds>(
+                p.time_since_epoch()).count();
+    }
+
+    uint64_t elapsed() {
+        const auto p = std::chrono::system_clock::now();
+        uint64_t newTime = std::chrono::duration_cast<std::chrono::microseconds>(
+                p.time_since_epoch()).count();
+        return newTime - currentTime;
+    }
+};
+
 uint64_t getDelay(bhft::WebSocket &ws) {
-    const int iterations = 10000;
+    const int iterations = 100;
     uint64_t delay = 0;
     for (int i = 0; i < iterations; ++i) {
         auto pingMessage = ws.getOutputMessage();
         bhft::Message pongMessage(buffer);
         pingMessage.write("ewe");
-        const auto pPing = std::chrono::system_clock::now();
-        uint64_t timestampPing = std::chrono::duration_cast<std::chrono::microseconds>(
-                pPing.time_since_epoch()).count();
+        TimeMeasurer measurer;
         ws.sendLastOutputMessage(bhft::wsheader_type::PING);
         ws.getMessage(pongMessage, true);
-        const auto pPong = std::chrono::system_clock::now();
-        uint64_t timestampPong = std::chrono::duration_cast<std::chrono::microseconds>(
-                pPong.time_since_epoch()).count();
-        delay += timestampPong - timestampPing;
+        delay += measurer.elapsed();
         //std::cout << "PING" << "\t" << timestampPong - timestampPing << std::endl;
     }
     return delay;
@@ -510,18 +528,13 @@ int main(int argc, char **argv) {
     uint64_t bestDelay = 10000000;
     if (argc > 1) bparser_log = true;
     uint64_t numIter = 0;
+
     while (true) {
         ++numIter;
         bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
         //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
 
-        uint64_t delay = getDelay(ws);
-        std::cout << "Delay:\t" << delay * 1.0 / 10000 << std::endl;
-        if (delay >= bestDelay) continue;
-        if (numIter < 100) {
-            bestDelay = delay;
-            continue;
-        }
+
 
         std::cout << "Connection starting..." << std::endl << std::endl;
         bhft::OutputMessage &message = ws.getOutputMessage();
@@ -533,22 +546,25 @@ int main(int argc, char **argv) {
                 R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
                 timestamp);
         message.write(buffer);
+        TimeMeasurer measurer;
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         bhft::Message inMessage1(buffer);
         ws.getMessage(inMessage1);
-        std::cout << "Login: " << buffer << std::endl;
+        std::cout << "Login: " << measurer.elapsed() << "\t" << buffer << std::endl;
 
         bhft::OutputMessage &message2 = ws.getOutputMessage();
         message2.write(
                 R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP", "instType":"SWAP"}]})");
         //message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP"}]})");
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+        measurer.reset();
         bhft::Message inMessage2(buffer);
         ws.getMessage(inMessage2);
-        std::cout << "Subscribe: " << buffer << std::endl;
+        std::cout << "Subscribe: " << measurer.elapsed() << "\t" << buffer << std::endl;
         std::cout << "Connection started" << std::endl << std::endl;
         int counter = 0;
         while (!ws.isClosed()) {
+            std::cout << "Ping:\t" << getDelay(ws) << std::endl;
             if (counter == 100) {
                 auto cur_time = std::chrono::system_clock::now();
                 std::time_t end_time = std::chrono::system_clock::to_time_t(cur_time);
