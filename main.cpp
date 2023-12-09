@@ -564,9 +564,9 @@ int main(int argc, char **argv) {
         ws.getMessage(inMessage2);
         std::cout << "Subscribe: " << measurer.elapsed() << "\t" << buffer << std::endl;
         std::cout << "Connection started" << std::endl << std::endl;
+
         int counter = 0;
         while (!ws.isClosed()) {
-            std::cout << "Ping:\t" << getDelay(ws) << std::endl;
             if (counter == 100) {
                 auto cur_time = std::chrono::system_clock::now();
                 std::time_t end_time = std::chrono::system_clock::to_time_t(cur_time);
