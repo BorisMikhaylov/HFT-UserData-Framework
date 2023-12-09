@@ -550,8 +550,10 @@ int main(int argc, char **argv) {
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         bhft::Message inMessage1(buffer);
         ws.getMessage(inMessage1);
-        std::cout << "Login: " << measurer.elapsed() << "\t" << buffer << std::endl;
-
+        auto loginPing = measurer.elapsed();
+        std::cout << "Login: " <<loginPing << "\t" << buffer << std::endl;
+        sleep(1);
+        if (loginPing > 20000) continue;
         bhft::OutputMessage &message2 = ws.getOutputMessage();
         message2.write(
                 R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP", "instType":"SWAP"}]})");
