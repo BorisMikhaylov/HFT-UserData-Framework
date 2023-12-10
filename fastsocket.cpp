@@ -139,7 +139,7 @@ namespace bhft {
             if (readLine(buffer) == closed) {
                 return;
             }
-            std::cout << buffer << std::endl;
+            //std::cout << buffer << std::endl;
         }
         int flag = 1;
         ::setsockopt(socket.socket, IPPROTO_TCP, TCP_NODELAY, (char *) &flag,
