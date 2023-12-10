@@ -6,6 +6,7 @@
 #include <cstring>
 #include <chrono>
 #include <utility>
+#include <map>
 #include "fastsocket.h"
 
 bool bparser_log = false;
@@ -525,8 +526,27 @@ uint64_t getDelay(bhft::WebSocket &ws) {
 }
 
 int main(int argc, char **argv) {
+
+    std::map<std::string, std::string> map;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        int index;
+        if (!(index = arg.find('='))) return -1;
+        map[arg.substr(0, index)] = arg.substr(index + 1);
+    }
+
+
     uint64_t bestDelay = 10000000;
-    if (argc > 1) bparser_log = true;
+    if (map["log"] == "true") bparser_log = true;
+    std::string channel = (map.find("channel") != map.end()) ? map["channel"] : "orders";
+    std::string instType = (map.find("instType") != map.end()) ? map["instType"] : "ANY";
+    std::string instId = (map.find("instId") != map.end()) ? map["instId"] : "";
+    std::string instIdStr = (instId == "") ? "" : R"(,"instId":")" + instId + R"(")";
+    std::string subscribeMessage =
+            R"({"op":"subscribe","args":[{"channel":")" + channel + R"(","instType":")" + instType + R"(")" +
+            instIdStr +
+            R"(}]})";
+    std::cout << "Subscribe message: \t" << subscribeMessage << std::endl;
     uint64_t numIter = 0;
 
     while (true) {
@@ -554,13 +574,10 @@ int main(int argc, char **argv) {
         std::cout << "Login: " << loginPing << "\t" << buffer << std::endl;
         sleep(1);
         if (loginPing > 20000) continue;
-        bhft::OutputMessage &message2 = ws.getOutputMessage();
-//        message2.write(
-//                R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP", "instType":"SWAP"}]})");
-        message2.write(
-                R"({"op":"subscribe","args":[{"channel":"orders", "instType":"ANY"}]})");
 
-        //message2.write(R"({"op":"subscribe","args":[{"channel":"orders","instId":"BNB-USDT-SWAP"}]})");
+        bhft::OutputMessage &message2 = ws.getOutputMessage();
+        message2.write(subscribeMessage.c_str());
+
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
         measurer.reset();
         bhft::Message inMessage2(buffer);
