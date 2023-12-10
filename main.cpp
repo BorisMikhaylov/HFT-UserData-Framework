@@ -549,6 +549,10 @@ int main(int argc, char **argv) {
     std::cout << "Subscribe message: \t" << subscribeMessage << std::endl;
     uint64_t numIter = 0;
 
+    int loginCount = (map.find("login") == map.end()) ? 1 : stoi(map["login"]);
+    int unsubscribeCount = (map.find("unsubscribe") == map.end()) ? 0 : stoi(map["unsubscribe"]);
+    int dropCount = (map.find("drop") == map.end()) ? -1 : stoi(map["drop"]);
+
     while (true) {
         ++numIter;
         bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
@@ -557,43 +561,59 @@ int main(int argc, char **argv) {
 
 
         std::cout << "Connection starting..." << std::endl << std::endl;
-        bhft::OutputMessage &message = ws.getOutputMessage();
-        const auto p1 = std::chrono::system_clock::now();
-        int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
-                p1.time_since_epoch()).count();
+        uint64_t loginTime = 0;
+        for (int i = 0; i < loginCount; ++i) {
+            bhft::OutputMessage &message = ws.getOutputMessage();
+            const auto p1 = std::chrono::system_clock::now();
+            int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
+                    p1.time_since_epoch()).count();
 
-        sprintf(buffer,
-                R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
-                timestamp);
-        message.write(buffer);
-        TimeMeasurer measurer;
-        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        bhft::Message inMessage1(buffer);
-        ws.getMessage(inMessage1);
-        auto loginPing = measurer.elapsed();
-        std::cout << "Login: " << loginPing << "\t" << buffer << std::endl;
-        sleep(1);
-        if (loginPing > 20000) continue;
+            sprintf(buffer,
+                    R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
+                    timestamp);
+            message.write(buffer);
+            TimeMeasurer measurer;
+            ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+            bhft::Message inMessage1(buffer);
+            ws.getMessage(inMessage1);
+            auto loginPing = measurer.elapsed();
+            loginTime += loginPing;
+            std::cout << "Login: " << loginPing << "\t" << buffer << std::endl;
+        }
+        std::cout << "Login time:\t" << loginTime << std::endl;
+        std::cout << "Login count:\t" << loginCount << std::endl;
+
+        uint64_t unsubscribeTime = 0;
+        for (int i = 0; i < unsubscribeCount; ++i) {
+            bhft::OutputMessage &message2 = ws.getOutputMessage();
+            message2.write(R"({"op":"unsubscribe","args":[{"channel":"orders","instType":"ANY"}]})");
+            TimeMeasurer measurer;
+            ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+            bhft::Message inMessage2(buffer);
+            ws.getMessage(inMessage2);
+            uint64_t elapsed = measurer.elapsed();
+            unsubscribeTime += elapsed;
+            std::cout << "Unsubscribe: " << elapsed << "\t" << buffer << std::endl;
+        }
+        std::cout << "Unsubscribe time:\t" << unsubscribeTime << std::endl;
+        std::cout << "Unsubscribe count:\t" << unsubscribeCount << std::endl;
 
         bhft::OutputMessage &message2 = ws.getOutputMessage();
         message2.write(subscribeMessage.c_str());
-
+        TimeMeasurer measurer;
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        measurer.reset();
         bhft::Message inMessage2(buffer);
         ws.getMessage(inMessage2);
         std::cout << "Subscribe: " << measurer.elapsed() << "\t" << buffer << std::endl;
         std::cout << "Connection started" << std::endl << std::endl;
-
         int counter = 0;
         while (!ws.isClosed()) {
-            if (counter == 100) {
+            if (counter == dropCount) break;
+            if (++counter % 100 == 0) {
                 auto cur_time = std::chrono::system_clock::now();
                 std::time_t end_time = std::chrono::system_clock::to_time_t(cur_time);
                 std::cout << "Still running: " << std::ctime(&end_time) << std::endl;
-                counter = 0;
             }
-            counter++;
             bhft::Message inMessage(buffer + 1);
             ws.getMessage(inMessage);
 
