@@ -541,8 +541,10 @@ int main(int argc, char **argv) {
     std::string channel = (map.find("channel") != map.end()) ? map["channel"] : "orders";
     std::string instType = (map.find("instType") != map.end()) ? map["instType"] : "ANY";
     std::string instId = (map.find("instId") != map.end()) ? map["instId"] : "";
-    std::string instIdStr = (instId == "") ? "" : R"(,"instId":")" + instId + R"(")";
+    std::string instIdStr = (instId.empty()) ? "" : R"(,"instId":")" + instId + R"(")";
     int loginUpperBound = (map.find("loginLimit") == map.end()) ? 20000 : stoi(map["loginLimit"]);
+    bool useNagle = (map.find("useNagle") != map.end()) && map["useNagle"] == "true";
+
     std::string subscribeMessage =
             R"({"op":"subscribe","args":[{"channel":")" + channel + R"(","instType":")" + instType + R"(")" +
             instIdStr +
@@ -554,7 +556,7 @@ int main(int argc, char **argv) {
 
     while (true) {
         ++numIter;
-        bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true);
+        bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true, useNagle);
         //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
 
         std::cout << "Connection starting..." << std::endl << std::endl;

@@ -126,7 +126,7 @@ namespace bhft {
         return success;
     }
 
-    WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask)
+    WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask, bool useNagle)
             : socket(hostname, port), useMask(useMask) {
         if (isClosed()) {
             return;
@@ -142,8 +142,10 @@ namespace bhft {
             //std::cout << buffer << std::endl;
         }
         int flag = 1;
-        //::setsockopt(socket.socket, IPPROTO_TCP, TCP_NODELAY, (char *) &flag,
-        //             sizeof(flag)); // Disable Nagle's algorithm
+        if (!useNagle) {
+            ::setsockopt(socket.socket, IPPROTO_TCP, TCP_NODELAY, (char *) &flag,
+                         sizeof(flag)); // Disable Nagle's algorithm
+        }
         int readSize = 8192;
         int writeSize = 8192;
         ::setsockopt(socket.socket, SOL_SOCKET, SO_RCVBUF, &readSize, sizeof(readSize));
