@@ -142,8 +142,8 @@ namespace bhft {
             //std::cout << buffer << std::endl;
         }
         int flag = 1;
-        ::setsockopt(socket.socket, IPPROTO_TCP, TCP_NODELAY, (char *) &flag,
-                     sizeof(flag)); // Disable Nagle's algorithm
+        //::setsockopt(socket.socket, IPPROTO_TCP, TCP_NODELAY, (char *) &flag,
+        //             sizeof(flag)); // Disable Nagle's algorithm
         int readSize = 8192;
         int writeSize = 8192;
         ::setsockopt(socket.socket, SOL_SOCKET, SO_RCVBUF, &readSize, sizeof(readSize));
