@@ -148,8 +148,8 @@ namespace bhft {
         }
         int readSize = 8192;
         int writeSize = 8192;
-        ::setsockopt(socket.socket, SOL_SOCKET, SO_RCVBUF, &readSize, sizeof(readSize));
-        ::setsockopt(socket.socket, SOL_SOCKET, SO_SNDBUF, &writeSize, sizeof(writeSize));
+        //::setsockopt(socket.socket, SOL_SOCKET, SO_RCVBUF, &readSize, sizeof(readSize));
+        //::setsockopt(socket.socket, SOL_SOCKET, SO_SNDBUF, &writeSize, sizeof(writeSize));
         ::fcntl(socket.socket, F_SETFL, O_NONBLOCK);
     }
 
