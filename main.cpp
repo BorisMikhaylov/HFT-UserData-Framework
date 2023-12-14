@@ -576,10 +576,10 @@ int main(int argc, char **argv) {
         ws.getMessage(inMessage1);
         auto loginPing = measurer.elapsed();
         std::cout << "Login: " << loginPing << "\t" << buffer << std::endl;
-        if (loginPing > loginUpperBound) {
-            sleep(1);
-            continue;
-        }
+//        if (loginPing > loginUpperBound) {
+//            sleep(1);
+//            continue;
+//        }
 
 
         bhft::OutputMessage &message2 = ws.getOutputMessage();
