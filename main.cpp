@@ -585,12 +585,15 @@ struct HFTSocket {
             }
         }
         out.write(R"(,"apiKey":"xNEkpMtgh6lF7v8K","sign":"SkAjqP4LC9UexmrX"})");
-        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+        if (ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME) == bhft::closed) {
+            return bhft::closed;
+        }
         if (bparser_log) {
             std::stringstream str;
             str << id << "\tSending message:\t" << std::string(input.begin[0], input.end[0]) << std::endl;
             std::cout << str.str();
         }
+        return bhft::success;
     }
 };
 
