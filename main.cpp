@@ -21,8 +21,6 @@ struct InputData {
     }
 };
 
-static InputData inputData[1000];
-
 struct InputDataSet {
     InputData *begin;
     InputData *end;
@@ -461,28 +459,6 @@ struct QuoteObjectCallback : ObjectCallback {
     }
 };
 
-void parseQuote(bhft::WebSocket *ws, bhft::Message &message) {
-    InputDataSet inputDataSet(inputData, inputData);
-    QuoteObjectCallback quoteObjectCallback(ws, inputDataSet);
-    input in(message);
-    if (in.parseObject(&quoteObjectCallback) == -2) return;
-    for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
-        auto &out = ws->getOutputMessage();
-        char prefix = '{';
-        for (int i = 0; i < 6; ++i) {
-            if ((input->mask >> i) & 1) {
-                out.write(prefix);
-                prefix = ',';
-                out.write(outputObjectId[i]);
-                out.write(':');
-                out.write(input->begin[i], input->end[i]);
-            }
-        }
-        out.write(R"(,"apiKey":"xNEkpMtgh6lF7v8K","sign":"SkAjqP4LC9UexmrX"})");
-        ws->sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        if (bparser_log) std::cout << "Sending message: " << std::endl;
-    }
-}
 
 static char buffer[10000000];
 
@@ -525,6 +501,105 @@ uint64_t getDelay(bhft::WebSocket &ws) {
     return delay;
 }
 
+struct HFTSocket {
+
+    bhft::WebSocket ws;
+    char buffer[4096];
+    int id;
+
+    explicit HFTSocket(int id) : ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true), id(id) {}
+
+    bhft::status login() {
+        bhft::OutputMessage &message = ws.getOutputMessage();
+        const auto p1 = std::chrono::system_clock::now();
+        int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
+                p1.time_since_epoch()).count();
+
+        sprintf(buffer,
+                R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
+                timestamp);
+        message.write(buffer);
+        if (ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME) == bhft::closed) {
+            return bhft::closed;
+        }
+        bhft::Message inMessage1(buffer);
+        if (ws.getMessage(inMessage1) == bhft::closed) {
+            return bhft::closed;
+        }
+        std::cout << id << "\tLogin:\t" << buffer << std::endl;
+        return bhft::success;
+    }
+
+    bhft::status subscribe(std::string &subscribeMessage) {
+        bhft::OutputMessage &message2 = ws.getOutputMessage();
+        message2.write(subscribeMessage.c_str());
+        if (ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME) == bhft::closed) {
+            return bhft::closed;
+        }
+        bhft::Message inMessage2(buffer);
+        if (ws.getMessage(inMessage2) == bhft::closed) {
+            return bhft::closed;
+        }
+        std::cout << id << "\tSubscribe:\t" << buffer << std::endl;
+        return bhft::success;
+    }
+
+    bhft::status readMessage(InputDataSet &inputDataSet) {
+        while (true) {
+            bhft::Message inMessage(buffer + 1);
+            if (ws.getMessage(inMessage) == bhft::closed) {
+                return bhft::closed;
+            }
+
+            if (bparser_log) std::cout << id << "\tArrived: " << buffer + 1 << std::endl << "";
+            if (inMessage.begin == inMessage.end) continue;
+            if (*inMessage.begin != '{') *--inMessage.begin = '{';
+            if (inMessage.end[-1] != '}') *inMessage.end++ = '}';
+            QuoteObjectCallback quoteObjectCallback(&ws, inputDataSet);
+            input in(inMessage);
+            if (in.parseObject(&quoteObjectCallback) == -2) continue;
+            return bhft::success;
+        }
+    }
+
+    bhft::status writeMessage(const InputData &input) {
+        auto &out = ws.getOutputMessage();
+        char prefix = '{';
+        for (int i = 0; i < 6; ++i) {
+            if ((input.mask >> i) & 1) {
+                out.write(prefix);
+                prefix = ',';
+                out.write(outputObjectId[i]);
+                out.write(':');
+                out.write(input.begin[i], input.end[i]);
+            }
+        }
+        out.write(R"(,"apiKey":"xNEkpMtgh6lF7v8K","sign":"SkAjqP4LC9UexmrX"})");
+        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
+        if (bparser_log) std::cout << id << "\tSending message: " << std::endl;
+    }
+};
+
+void process(int id, std::string &subscribeMessage) {
+    HFTSocket hftSocket(id);
+    if (hftSocket.login() == bhft::closed) return;
+    if (hftSocket.subscribe(subscribeMessage) == bhft::closed) return;
+    InputData inputData[10];
+    while (true) {
+        InputDataSet inputDataSet(inputData, inputData);
+        if (hftSocket.readMessage(inputDataSet) == bhft::closed) return;
+        for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
+            if (hftSocket.writeMessage(*input) == bhft::closed) return;
+        }
+    }
+}
+
+void processLoop(int id, std::string &subscribeMessage) {
+    while (true) {
+        process(id++, subscribeMessage);
+    }
+}
+
 int main(int argc, char **argv) {
 
     std::map<std::string, std::string> map;
@@ -543,69 +618,13 @@ int main(int argc, char **argv) {
     std::string instId = (map.find("instId") != map.end()) ? map["instId"] : "";
     std::string instIdStr = (instId.empty()) ? "" : R"(,"instId":")" + instId + R"(")";
     int loginUpperBound = (map.find("loginLimit") == map.end()) ? 20000 : stoi(map["loginLimit"]);
-    bool useNagle = (map.find("useNagle") != map.end()) && map["useNagle"] == "true";
 
     std::string subscribeMessage =
             R"({"op":"subscribe","args":[{"channel":")" + channel + R"(","instType":")" + instType + R"(")" +
             instIdStr +
             R"(}]})";
     std::cout << "Subscribe message: \t" << subscribeMessage << std::endl;
-    uint64_t numIter = 0;
 
-    int dropCount = (map.find("drop") == map.end()) ? -1 : stoi(map["drop"]);
+    processLoop(0, subscribeMessage);
 
-    while (true) {
-        ++numIter;
-        bhft::WebSocket ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true, useNagle);
-        //bhft::WebSocket ws("127.0.0.1", 8080, "", true);
-
-        std::cout << "Connection starting..." << std::endl << std::endl;
-
-        bhft::OutputMessage &message = ws.getOutputMessage();
-        const auto p1 = std::chrono::system_clock::now();
-        int timestamp = std::chrono::duration_cast<std::chrono::seconds>(
-                p1.time_since_epoch()).count();
-
-        sprintf(buffer,
-                R"({"op":"login","args":[{"apiKey":"xNEkpMtgh6lF7v8K","passphrase":"","timestamp":%i,"sign":"SkAjqP4LC9UexmrX"}]})",
-                timestamp);
-        message.write(buffer);
-        TimeMeasurer measurer;
-        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        bhft::Message inMessage1(buffer);
-        ws.getMessage(inMessage1);
-        auto loginPing = measurer.elapsed();
-        std::cout << "Login: " << loginPing << "\t" << buffer << std::endl;
-//        if (loginPing > loginUpperBound) {
-//            sleep(1);
-//            continue;
-//        }
-
-
-        bhft::OutputMessage &message2 = ws.getOutputMessage();
-        message2.write(subscribeMessage.c_str());
-        measurer.reset();
-        ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        bhft::Message inMessage2(buffer);
-        ws.getMessage(inMessage2);
-        std::cout << "Subscribe: " << measurer.elapsed() << "\t" << buffer << std::endl;
-        std::cout << "Connection started" << std::endl << std::endl;
-        int counter = 0;
-        while (!ws.isClosed()) {
-            if (counter == dropCount) break;
-            if (++counter % 100 == 0) {
-                auto cur_time = std::chrono::system_clock::now();
-                std::time_t end_time = std::chrono::system_clock::to_time_t(cur_time);
-                std::cout << "Still running: " << std::ctime(&end_time) << std::endl;
-            }
-            bhft::Message inMessage(buffer + 1);
-            ws.getMessage(inMessage);
-
-            if (bparser_log) std::cout << "Arrived: " << buffer + 1 << std::endl << "";
-            if (inMessage.begin == inMessage.end) continue;
-            if (*inMessage.begin != '{') *--inMessage.begin = '{';
-            if (inMessage.end[-1] != '}') *inMessage.end++ = '}';
-            parseQuote(&ws, inMessage);
-        }
-    }
 }

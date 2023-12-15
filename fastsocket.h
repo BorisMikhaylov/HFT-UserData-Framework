@@ -126,7 +126,7 @@ namespace bhft {
         bool useMask;
         OutputMessage outputMessage;
 
-        explicit WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask, bool useNagle);
+        explicit WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask);
 
         status readLine(char *buffer);
 
