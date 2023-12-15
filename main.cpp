@@ -7,6 +7,8 @@
 #include <chrono>
 #include <utility>
 #include <map>
+#include <thread>
+#include <sstream>
 #include "fastsocket.h"
 
 bool bparser_log = false;
@@ -551,7 +553,15 @@ struct HFTSocket {
                 return bhft::closed;
             }
 
-            if (bparser_log) std::cout << id << "\tArrived: " << buffer + 1 << std::endl << "";
+            if (bparser_log) {
+                struct timeval now;
+                uint64_t timestamp;
+                gettimeofday(&now, NULL);
+                timestamp = (uint64_t) now.tv_sec * 1000000 + (uint64_t) now.tv_usec;
+                std::stringstream str;
+                str << id << "\t" << timestamp << "\tArrived: " << buffer + 1 << std::endl;
+                std::cout << str.str();
+            }
             if (inMessage.begin == inMessage.end) continue;
             if (*inMessage.begin != '{') *--inMessage.begin = '{';
             if (inMessage.end[-1] != '}') *inMessage.end++ = '}';
@@ -576,7 +586,11 @@ struct HFTSocket {
         }
         out.write(R"(,"apiKey":"xNEkpMtgh6lF7v8K","sign":"SkAjqP4LC9UexmrX"})");
         ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME);
-        if (bparser_log) std::cout << id << "\tSending message: " << std::endl;
+        if (bparser_log) {
+            std::stringstream str;
+            str << id << "\tSending message:\t" << std::string(input.begin[0], input.end[0]) << std::endl;
+            std::cout << str.str();
+        }
     }
 };
 
@@ -625,6 +639,9 @@ int main(int argc, char **argv) {
             R"(}]})";
     std::cout << "Subscribe message: \t" << subscribeMessage << std::endl;
 
-    processLoop(0, subscribeMessage);
+    std::thread thread1([&subscribeMessage]() {
+        processLoop(1000000, subscribeMessage);
+    });
+    processLoop(2000000, subscribeMessage);
 
 }

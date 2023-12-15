@@ -252,8 +252,8 @@ namespace bhft {
     }
 
     status WebSocket::sendLastOutputMessage(wsheader_type::opcode_type type) {
-        //const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
-        const uint8_t masking_key[4] = {0, 0, 0, 0};
+        const uint8_t masking_key[4] = {0x12, 0x34, 0x56, 0x78};
+        //const uint8_t masking_key[4] = {0, 0, 0, 0};
         // TODO: consider acquiring a lock on txbuf...
         size_t messageSize = outputMessage.end - outputMessage.begin;
 
@@ -296,14 +296,14 @@ namespace bhft {
             }
         }
         // N.B. - txbuf will keep growing until it can be transmitted over the socket:
-//        if (useMask) {
-//// could be omitted when masking key is zeros
-//            auto m = *(unsigned int *) masking_key;
-//            for (size_t i = 0; i < messageSize; i += sizeof(unsigned)) {
-//                *(unsigned int *) (outputMessage.begin + i) ^= m;
-//            }
-//
-//        }
+        if (useMask) {
+// could be omitted when masking key is zeros
+            auto m = *(unsigned int *) masking_key;
+            for (size_t i = 0; i < messageSize; i += sizeof(unsigned)) {
+                *(unsigned int *) (outputMessage.begin + i) ^= m;
+            }
+
+        }
         return socket.write(reinterpret_cast<const char *>(header), messageSize + headerSize);
     }
 
