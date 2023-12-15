@@ -509,7 +509,7 @@ struct HFTSocket {
     char buffer[4096];
     int id;
 
-    explicit HFTSocket(int id) : ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true), id(id) {}
+    explicit HFTSocket(int id, bool waitOnSocket) : ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true, waitOnSocket), id(id) {}
 
     bhft::status login() {
         bhft::OutputMessage &message = ws.getOutputMessage();
@@ -597,8 +597,8 @@ struct HFTSocket {
     }
 };
 
-void process(int id, std::string &subscribeMessage) {
-    HFTSocket hftSocket(id);
+void process(int id, std::string &subscribeMessage, bool waitOnSocket) {
+    HFTSocket hftSocket(id, waitOnSocket);
     if (hftSocket.login() == bhft::closed) return;
     if (hftSocket.subscribe(subscribeMessage) == bhft::closed) return;
     InputData inputData[10];
@@ -611,9 +611,9 @@ void process(int id, std::string &subscribeMessage) {
     }
 }
 
-void processLoop(int id, std::string &subscribeMessage) {
+void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket) {
     while (true) {
-        process(id++, subscribeMessage);
+        process(id++, subscribeMessage, waitOnSocket);
     }
 }
 
@@ -635,6 +635,8 @@ int main(int argc, char **argv) {
     std::string instId = (map.find("instId") != map.end()) ? map["instId"] : "";
     std::string instIdStr = (instId.empty()) ? "" : R"(,"instId":")" + instId + R"(")";
     int loginUpperBound = (map.find("loginLimit") == map.end()) ? 20000 : stoi(map["loginLimit"]);
+    int logLevel = (map.find("logLevel") == map.end()) ? 1 : stoi(map["logLevel"]);
+    bool waitOnSocket = map["wait"] == "true";
 
     std::string subscribeMessage =
             R"({"op":"subscribe","args":[{"channel":")" + channel + R"(","instType":")" + instType + R"(")" +
@@ -642,9 +644,14 @@ int main(int argc, char **argv) {
             R"(}]})";
     std::cout << "Subscribe message: \t" << subscribeMessage << std::endl;
 
-    std::thread thread1([&subscribeMessage]() {
-        processLoop(1000000, subscribeMessage);
-    });
-    processLoop(2000000, subscribeMessage);
+    std::vector<std::thread> threads;
+    for (int i = 0; i < logLevel; ++i) {
+        threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket]() {
+            processLoop((i+1)*10000, subscribeMessage, waitOnSocket);
+        }));
+    }
+    for (int i = 0; i < logLevel; ++i){
+        threads[i].join();
+    }
 
 }

@@ -70,6 +70,7 @@ namespace bhft {
         char *end;
         socket_t socket;
         bool socketClosed;
+        bool waitOnSocket;
 
         status read(char *dst, size_t count);
 
@@ -77,7 +78,7 @@ namespace bhft {
 
         ~Socket();
 
-        Socket(const std::string &hostname, int port);
+        Socket(const std::string &hostname, int port, bool waitOnSocket);
 
         bool isClosed() {
             return socketClosed;
@@ -126,7 +127,7 @@ namespace bhft {
         bool useMask;
         OutputMessage outputMessage;
 
-        explicit WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask);
+        explicit WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask, bool waitOnSocket);
 
         status readLine(char *buffer);
 

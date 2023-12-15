@@ -6,8 +6,8 @@
 
 namespace bhft {
 
-    Socket::Socket(const std::string &hostname, int port) : socket(INVALID_SOCKET), begin(readBuffer), end(readBuffer),
-                                                            socketClosed(false) {
+    Socket::Socket(const std::string &hostname, int port, bool waitOnSocket) : socket(INVALID_SOCKET), begin(readBuffer), end(readBuffer),
+                                                            socketClosed(false), waitOnSocket(waitOnSocket) {
         struct addrinfo hints;
         struct addrinfo *result;
         struct addrinfo *p;
@@ -47,7 +47,13 @@ namespace bhft {
         while (count > 0) {
             ssize_t cntReadBytes = recv(socket, readBuffer, sizeof(readBuffer) - 8, 0);
             if (cntReadBytes < 0 && (socketerrno == SOCKET_EWOULDBLOCK || socketerrno == SOCKET_EAGAIN_EINPROGRESS)) {
-                //TODO wait for data and PING if there's no data
+                if (waitOnSocket) {
+                    fd_set rfds;
+                    timeval tv = {10, 0};
+                    FD_ZERO(&rfds);
+                    FD_SET(socket, &rfds);
+                    select(socket + 1, &rfds, nullptr, 0, &tv);
+                }
                 continue;
             } else if (cntReadBytes <= 0) {
                 socketClosed = true;
@@ -126,8 +132,8 @@ namespace bhft {
         return success;
     }
 
-    WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask)
-            : socket(hostname, port), useMask(useMask) {
+    WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask, bool waitOnSocket)
+            : socket(hostname, port, waitOnSocket), useMask(useMask) {
         if (isClosed()) {
             return;
         }
