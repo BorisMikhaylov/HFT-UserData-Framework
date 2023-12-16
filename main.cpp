@@ -733,10 +733,10 @@ int main(int argc, char **argv) {
     std::vector<std::thread> threads;
     for (int i = 0; i < logLevel; ++i) {
         threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket]() {
-            if (i == 0) sleep(20);
-            else sleep((rand() % 1000) / 100.0);
+            sleep((rand() % 1000) / 100.0);
             processLoop((i + 1) * 10000, subscribeMessage, waitOnSocket);
         }));
+        if (i == 0) sleep(20);
     }
     for (int i = 0; i < logLevel; ++i) {
         threads[i].join();
