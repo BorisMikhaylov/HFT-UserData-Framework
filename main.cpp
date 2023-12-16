@@ -13,6 +13,55 @@
 
 bool bparser_log = false;
 
+class SpinLock {
+    const int UNLOCKED = 0;
+    const int LOCKED = 1;
+
+    std::atomic<int> m_value = 0;
+
+public:
+    void lock() {
+        while (true) {
+            int expected = UNLOCKED;
+            if (m_value.compare_exchange_strong(expected, LOCKED))
+                break;
+        }
+    }
+
+    void unlock() {
+        m_value.store(UNLOCKED);
+    }
+};
+
+struct ThreadSync {
+    static const int dataSize = 128;
+    uint64_t data[dataSize];
+    int index;
+    SpinLock locker;
+
+    void lock() {
+        locker.lock();
+    }
+
+    void unlock() {
+        locker.unlock();
+    }
+
+    bool contains(uint64_t id) {
+        for (int i = 0; i < dataSize; ++i) {
+            if (data[i] == id) return true;
+        }
+        return false;
+    }
+
+    void add(uint64_t id) {
+        data[index++] = id;
+        index %= dataSize;
+    }
+};
+
+ThreadSync threadSync;
+
 struct InputData {
     const char *begin[6];
     const char *end[6];
@@ -20,6 +69,18 @@ struct InputData {
 
     void reset() {
         mask = 0;
+    }
+
+    uint64_t getId() {
+        uint64_t id = 0;
+        const char *ordBegin = begin[0];
+        const char *ordEnd = end[0];
+        while (ordBegin != ordEnd) {
+            id *= 10;
+            id += (*ordBegin++) - '0';
+        }
+        if (begin[4][1] == 'c') id *= 10;
+        return id;
     }
 };
 
@@ -509,7 +570,8 @@ struct HFTSocket {
     char buffer[4096];
     int id;
 
-    explicit HFTSocket(int id, bool waitOnSocket) : ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private", true, waitOnSocket), id(id) {}
+    explicit HFTSocket(int id, bool waitOnSocket) : ws("127.0.0.1", 9999, "?url=wss://ws.okx.com:8443/ws/v5/private",
+                                                       true, waitOnSocket), id(id) {}
 
     bhft::status login() {
         bhft::OutputMessage &message = ws.getOutputMessage();
@@ -606,7 +668,18 @@ void process(int id, std::string &subscribeMessage, bool waitOnSocket) {
         InputDataSet inputDataSet(inputData, inputData);
         if (hftSocket.readMessage(inputDataSet) == bhft::closed) return;
         for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
-            if (hftSocket.writeMessage(*input) == bhft::closed) return;
+            uint64_t id = input->getId();
+            threadSync.lock();
+            if (threadSync.contains(id)) {
+                threadSync.unlock();
+                continue;
+            }
+            if (hftSocket.writeMessage(*input) == bhft::closed) {
+                threadSync.unlock();
+                return;
+            }
+            threadSync.add(id);
+            threadSync.unlock();
         }
     }
 }
@@ -616,6 +689,7 @@ void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket) {
         process(id++, subscribeMessage, waitOnSocket);
     }
 }
+
 
 int main(int argc, char **argv) {
 
@@ -647,10 +721,11 @@ int main(int argc, char **argv) {
     std::vector<std::thread> threads;
     for (int i = 0; i < logLevel; ++i) {
         threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket]() {
-            processLoop((i+1)*10000, subscribeMessage, waitOnSocket);
+            sleep((rand() % 1000) / 100.0);
+            processLoop((i + 1) * 10000, subscribeMessage, waitOnSocket);
         }));
     }
-    for (int i = 0; i < logLevel; ++i){
+    for (int i = 0; i < logLevel; ++i) {
         threads[i].join();
     }
 
