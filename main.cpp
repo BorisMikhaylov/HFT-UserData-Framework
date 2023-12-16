@@ -10,6 +10,8 @@
 #include <thread>
 #include <sstream>
 #include <atomic>
+#include <iomanip>
+#include <ctime>
 #include "fastsocket.h"
 
 bool bparser_log = false;
@@ -565,6 +567,14 @@ uint64_t getDelay(bhft::WebSocket &ws) {
     return delay;
 }
 
+std::string getTimeAsString() {
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+    std::stringstream str;
+    str << std::put_time(&tm, "%d-%m-%Y %H:%M:%S");
+    return str.str();
+}
+
 struct HFTSocket {
 
     bhft::WebSocket ws;
@@ -591,7 +601,8 @@ struct HFTSocket {
         if (ws.getMessage(inMessage1) == bhft::closed) {
             return bhft::closed;
         }
-        std::cout << id << "\tLogin:\t" << buffer << std::endl;
+        auto start = std::chrono::system_clock::now();
+        std::cout << id << "\tLogin:\t" << getTimeAsString() << "\t" << buffer << std::endl;
         return bhft::success;
     }
 
@@ -605,7 +616,7 @@ struct HFTSocket {
         if (ws.getMessage(inMessage2) == bhft::closed) {
             return bhft::closed;
         }
-        std::cout << id << "\tSubscribe:\t" << buffer << std::endl;
+        std::cout << id << "\tSubscribe:\t" << getTimeAsString() << "\t" << buffer << std::endl;
         return bhft::success;
     }
 

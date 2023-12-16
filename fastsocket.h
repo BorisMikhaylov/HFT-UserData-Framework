@@ -44,7 +44,8 @@ namespace bhft {
 
     enum status {
         success,
-        closed
+        closed,
+        noData
     };
 
     struct wsheader_type {
@@ -72,7 +73,7 @@ namespace bhft {
         bool socketClosed;
         bool waitOnSocket;
 
-        status read(char *dst, size_t count);
+        status read(char *dst, size_t count, bool returnOnNoData);
 
         status write(const char *src, int count);
 
@@ -135,7 +136,7 @@ namespace bhft {
             return socket.isClosed();
         }
 
-        status getMessage(Message& message, bool returnOnPong = false);
+        status getMessage(Message& message, bool returnOnPong = false, bool returnOnNoData = false);
 
         OutputMessage &getOutputMessage();
 

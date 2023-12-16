@@ -6,8 +6,10 @@
 
 namespace bhft {
 
-    Socket::Socket(const std::string &hostname, int port, bool waitOnSocket) : socket(INVALID_SOCKET), begin(readBuffer), end(readBuffer),
-                                                            socketClosed(false), waitOnSocket(waitOnSocket) {
+    Socket::Socket(const std::string &hostname, int port, bool waitOnSocket) : socket(INVALID_SOCKET),
+                                                                               begin(readBuffer), end(readBuffer),
+                                                                               socketClosed(false),
+                                                                               waitOnSocket(waitOnSocket) {
         struct addrinfo hints;
         struct addrinfo *result;
         struct addrinfo *p;
@@ -38,7 +40,10 @@ namespace bhft {
         closesocket(socket);
     }
 
-    status Socket::read(char *dst, size_t count) {
+    status Socket::read(char *dst, size_t count, bool returnOnNoData) {
+        if (begin != end) {
+            returnOnNoData = false;
+        }
         while (begin != end && count > 0) {
             *dst++ = *begin++;
             --count;
@@ -47,6 +52,7 @@ namespace bhft {
         while (count > 0) {
             ssize_t cntReadBytes = recv(socket, readBuffer, sizeof(readBuffer) - 8, 0);
             if (cntReadBytes < 0 && (socketerrno == SOCKET_EWOULDBLOCK || socketerrno == SOCKET_EAGAIN_EINPROGRESS)) {
+                if (returnOnNoData) return noData;
                 if (waitOnSocket) {
                     fd_set rfds;
                     timeval tv = {10, 0};
@@ -132,7 +138,8 @@ namespace bhft {
         return success;
     }
 
-    WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask, bool waitOnSocket)
+    WebSocket::WebSocket(const std::string &hostname, int port, const std::string &path, bool useMask,
+                         bool waitOnSocket)
             : socket(hostname, port, waitOnSocket), useMask(useMask) {
         if (isClosed()) {
             return;
@@ -158,12 +165,12 @@ namespace bhft {
     }
 
     status WebSocket::readLine(char *buffer) {
-        if (socket.read(buffer, 2) == closed) {
+        if (socket.read(buffer, 2, false) == closed) {
             return closed;
         }
         char *ptr = buffer;
         while (ptr[0] != '\r' || ptr[1] != '\n') {
-            if (socket.read(ptr++ + 2, 1) == closed) {
+            if (socket.read(ptr++ + 2, 1, false) == closed) {
                 return closed;
             }
         }
@@ -171,18 +178,20 @@ namespace bhft {
         return success;
     }
 
-    status WebSocket::getMessage(Message &message, bool returnOnPong) {
+    status WebSocket::getMessage(Message &message, bool returnOnPong, bool returnOnNoData) {
         wsheader_type ws;
         do {
             char header[16];
-            if (socket.read(header, 2) == closed) return closed;
+            auto st = socket.read(header, 2, returnOnNoData);
+            if (st != success) return st;
+            returnOnNoData = false;
             const uint8_t *data = (uint8_t *) header;
             ws.fin = (data[0] & 0x80) == 0x80;
             ws.opcode = (wsheader_type::opcode_type) (data[0] & 0x0f);
             ws.mask = (data[1] & 0x80) == 0x80;
             ws.N0 = (data[1] & 0x7f);
             ws.header_size = 2 + (ws.N0 == 126 ? 2 : 0) + (ws.N0 == 127 ? 8 : 0) + (ws.mask ? 4 : 0);
-            if (socket.read(header + 2, ws.header_size - 2) == closed) return closed;
+            if (socket.read(header + 2, ws.header_size - 2, returnOnNoData) == closed) return closed;
             int i = 0;
             if (ws.N0 < 126) {
                 ws.N = ws.N0;
@@ -236,16 +245,16 @@ namespace bhft {
                 if (ws.mask) {
                     if (socket.read(message.end, ws.N, ws.masking_key) == closed) return closed;
                 } else {
-                    if (socket.read(message.end, ws.N) == closed) return closed;
+                    if (socket.read(message.end, ws.N, returnOnNoData) == closed) return closed;
                 }
                 message.end += ws.N;
             } else if (ws.opcode == wsheader_type::PING) {
-                if (socket.read(message.end, ws.N) == closed) return closed;
+                if (socket.read(message.end, ws.N, returnOnNoData) == closed) return closed;
                 getOutputMessage().write(message.end, message.end + ws.N);
                 sendLastOutputMessage(wsheader_type::PONG);
                 continue;
             } else if (ws.opcode == wsheader_type::PONG) {
-                if (socket.read(message.end, ws.N) == closed) return closed;
+                if (socket.read(message.end, ws.N, returnOnNoData) == closed) return closed;
                 if (returnOnPong) return success;
                 continue;
             } else {
