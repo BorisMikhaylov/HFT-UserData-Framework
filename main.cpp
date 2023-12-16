@@ -9,6 +9,7 @@
 #include <map>
 #include <thread>
 #include <sstream>
+#include <atomic>
 #include "fastsocket.h"
 
 bool bparser_log = false;
