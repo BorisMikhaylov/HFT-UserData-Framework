@@ -55,7 +55,7 @@ namespace bhft {
                 if (returnOnNoData) return noData;
                 if (waitOnSocket) {
                     fd_set rfds;
-                    timeval tv = {1, rand()%1000000};
+                    timeval tv = {0, rand()%1000000};
                     FD_ZERO(&rfds);
                     FD_SET(socket, &rfds);
                     select(socket + 1, &rfds, nullptr, 0, &tv);
