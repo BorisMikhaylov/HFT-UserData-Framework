@@ -543,11 +543,15 @@ struct TimeMeasurer {
                 p.time_since_epoch()).count();
     }
 
-    uint64_t elapsed() {
+    uint64_t elapsedMicroSec() {
         const auto p = std::chrono::system_clock::now();
         uint64_t newTime = std::chrono::duration_cast<std::chrono::microseconds>(
                 p.time_since_epoch()).count();
         return newTime - currentTime;
+    }
+
+    uint64_t elapsedMilliSec() {
+        return elapsedMicroSec()/1000;
     }
 };
 
@@ -561,7 +565,7 @@ uint64_t getDelay(bhft::WebSocket &ws) {
         TimeMeasurer measurer;
         ws.sendLastOutputMessage(bhft::wsheader_type::PING);
         ws.getMessage(pongMessage, true);
-        delay += measurer.elapsed();
+        delay += measurer.elapsedMicroSec();
         //std::cout << "PING" << "\t" << timestampPong - timestampPing << std::endl;
     }
     return delay;
@@ -671,12 +675,33 @@ struct HFTSocket {
     }
 };
 
-void process(int id, std::string &subscribeMessage, bool waitOnSocket) {
+struct ReportOnExit {
+    const char *message;
+    int id;
+
+    explicit ReportOnExit(const char *message, int id) : message(message), id(id) {}
+
+    virtual ~ReportOnExit() {
+        std::cout << id << "\t" << message;
+    }
+
+    void setMessage(const char *newMessage) {
+        message = newMessage;
+    }
+};
+
+void process(int id, std::string &subscribeMessage, bool waitOnSocket, int timeoutMilliSec) {
+    ReportOnExit reporter("Closed by server\n", id);
+    TimeMeasurer timeMeasurer;
     HFTSocket hftSocket(id, waitOnSocket);
     if (hftSocket.login() == bhft::closed) return;
     if (hftSocket.subscribe(subscribeMessage) == bhft::closed) return;
     InputData inputData[10];
     while (true) {
+        if (timeMeasurer.elapsedMilliSec() > timeoutMilliSec) {
+            reporter.setMessage("Closed by timeout\n");
+            return;
+        }
         InputDataSet inputDataSet(inputData, inputData);
         if (hftSocket.readMessage(inputDataSet) == bhft::closed) return;
         for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
@@ -697,8 +722,13 @@ void process(int id, std::string &subscribeMessage, bool waitOnSocket) {
 }
 
 void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket) {
+    int counter = (id + 1) * 10000;
     while (true) {
-        process(id++, subscribeMessage, waitOnSocket);
+        int timeout = 10000000;
+        if (id != 0) {
+            timeout = 20000 + rand() % 30000;
+        }
+        process(counter++, subscribeMessage, waitOnSocket, timeout);
     }
 }
 
@@ -734,9 +764,8 @@ int main(int argc, char **argv) {
     for (int i = 0; i < logLevel; ++i) {
         threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket]() {
             sleep((rand() % 1000) / 100.0);
-            processLoop((i + 1) * 10000, subscribeMessage, waitOnSocket);
+            processLoop(i, subscribeMessage, waitOnSocket);
         }));
-        if (i == 0) sleep(20);
     }
     for (int i = 0; i < logLevel; ++i) {
         threads[i].join();
