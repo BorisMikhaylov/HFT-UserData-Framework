@@ -724,6 +724,7 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
 void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket) {
     int counter = (id + 1) * 10000;
     while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 1000));
         process(id, counter++, subscribeMessage, waitOnSocket);
     }
 }
@@ -767,7 +768,7 @@ int main(int argc, char **argv) {
     int i = 0;
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(timeout + rand() % timeout));
-        bhft::socket_t socket = threadSync.socket[(i++) % logLevel];
+        bhft::socket_t socket = threadSync.socket[(i++) % (logLevel - 1)];
         std::cout << "Closing socket:\t" << (i % logLevel) << "\t" << socket << std::endl;
         closesocket(socket);
     }
