@@ -8,6 +8,7 @@
 #include <utility>
 #include <map>
 #include <thread>
+#include <unistd.h>
 #include <sstream>
 #include <atomic>
 #include <iomanip>
@@ -36,19 +37,24 @@ public:
     }
 };
 
+struct Mutex {
+    SpinLock &spinLock;
+
+    Mutex(SpinLock &spinLock) : spinLock(spinLock) {
+        spinLock.lock();
+    }
+
+    virtual ~Mutex() {
+        spinLock.unlock();
+    }
+};
+
 struct ThreadSync {
     static const int dataSize = 128;
-    uint64_t data[dataSize];
-    int index;
+    volatile uint64_t data[dataSize];
+    volatile int index;
     SpinLock locker;
-
-    void lock() {
-        locker.lock();
-    }
-
-    void unlock() {
-        locker.unlock();
-    }
+    volatile bhft::socket_t socket[10];
 
     bool contains(uint64_t id) {
         for (int i = 0; i < dataSize; ++i) {
@@ -689,34 +695,28 @@ struct ReportOnExit {
     }
 };
 
-void process(int id, std::string &subscribeMessage, bool waitOnSocket, int timeoutMilliSec) {
+void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSocket) {
     ReportOnExit reporter("Closed by server\n", id);
     TimeMeasurer timeMeasurer;
     HFTSocket hftSocket(id, waitOnSocket);
+    threadSync.socket[threadId] = hftSocket.ws.socket.socket;
     if (hftSocket.login() == bhft::closed) return;
     if (hftSocket.subscribe(subscribeMessage) == bhft::closed) return;
     InputData inputData[10];
     while (true) {
-        if (timeMeasurer.elapsedMilliSec() > timeoutMilliSec) {
-            reporter.setMessage("Closed by timeout\n");
-            return;
-        }
         InputDataSet inputDataSet(inputData, inputData);
         auto stat = hftSocket.readMessage(inputDataSet, true);
         if (stat == bhft::closed) return;
         for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
             uint64_t inputId = input->getId();
-            threadSync.lock();
+            Mutex mutex(threadSync.locker);
             if (threadSync.contains(inputId)) {
-                threadSync.unlock();
                 continue;
             }
             if (hftSocket.writeMessage(*input) == bhft::closed) {
-                threadSync.unlock();
                 return;
             }
             threadSync.add(inputId);
-            threadSync.unlock();
         }
     }
 }
@@ -724,11 +724,7 @@ void process(int id, std::string &subscribeMessage, bool waitOnSocket, int timeo
 void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket) {
     int counter = (id + 1) * 10000;
     while (true) {
-        int timeout = 10000000;
-        if (id != 0) {
-            timeout = 20000 + rand() % 30000;
-        }
-        process(counter++, subscribeMessage, waitOnSocket, timeout);
+        process(id, counter++, subscribeMessage, waitOnSocket);
     }
 }
 
@@ -762,10 +758,18 @@ int main(int argc, char **argv) {
 
     std::vector<std::thread> threads;
     for (int i = 0; i < logLevel; ++i) {
+        sleep((rand() % 1000) / 100.0);
         threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket]() {
-            sleep((rand() % 1000) / 100.0);
             processLoop(i, subscribeMessage, waitOnSocket);
         }));
+    }
+    int timeout = 60000 / logLevel / 2;
+    int i = 0;
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeout + rand() % timeout));
+        bhft::socket_t socket = threadSync.socket[(i++) % logLevel];
+        std::cout << "Closing socket:\t" << (i % logLevel) << "\t" << socket << std::endl;
+        closesocket(socket);
     }
     for (int i = 0; i < logLevel; ++i) {
         threads[i].join();
