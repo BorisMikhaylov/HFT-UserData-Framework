@@ -551,7 +551,7 @@ struct TimeMeasurer {
     }
 
     uint64_t elapsedMilliSec() {
-        return elapsedMicroSec()/1000;
+        return elapsedMicroSec() / 1000;
     }
 };
 
@@ -624,12 +624,11 @@ struct HFTSocket {
         return bhft::success;
     }
 
-    bhft::status readMessage(InputDataSet &inputDataSet) {
+    bhft::status readMessage(InputDataSet &inputDataSet, bool returnOnNoData = false) {
         while (true) {
             bhft::Message inMessage(buffer + 1);
-            if (ws.getMessage(inMessage) == bhft::closed) {
-                return bhft::closed;
-            }
+            auto stat = ws.getMessage(inMessage, returnOnNoData);
+            if (stat != bhft::success) return stat;
 
             if (bparser_log) {
                 struct timeval now;
@@ -703,11 +702,12 @@ void process(int id, std::string &subscribeMessage, bool waitOnSocket, int timeo
             return;
         }
         InputDataSet inputDataSet(inputData, inputData);
-        if (hftSocket.readMessage(inputDataSet) == bhft::closed) return;
+        auto stat = hftSocket.readMessage(inputDataSet, true);
+        if (stat == bhft::closed) return;
         for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
-            uint64_t id = input->getId();
+            uint64_t inputId = input->getId();
             threadSync.lock();
-            if (threadSync.contains(id)) {
+            if (threadSync.contains(inputId)) {
                 threadSync.unlock();
                 continue;
             }
@@ -715,7 +715,7 @@ void process(int id, std::string &subscribeMessage, bool waitOnSocket, int timeo
                 threadSync.unlock();
                 return;
             }
-            threadSync.add(id);
+            threadSync.add(inputId);
             threadSync.unlock();
         }
     }
