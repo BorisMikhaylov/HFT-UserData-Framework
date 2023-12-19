@@ -74,7 +74,7 @@ struct Mutex {
 
     virtual ~Mutex() {
         spinLock.unlock();
-        std::cout << "Mutex ellapsed microsec:\t" << timeMeasurer.elapsedMicroSec() << std::endl;
+        if (bparser_log) std::cout << "Mutex ellapsed microsec:\t" << timeMeasurer.elapsedMicroSec() << std::endl;
     }
 };
 
@@ -699,7 +699,6 @@ struct ReportOnExit {
 
 void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSocket) {
     ReportOnExit reporter("Closed by server\n", id);
-    TimeMeasurer timeMeasurer;
     HFTSocket hftSocket(id, waitOnSocket);
     threadSync.socket[threadId] = hftSocket.ws.socket.socket;
     if (hftSocket.login() == bhft::closed) return;
@@ -707,7 +706,9 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
     InputData inputData[10];
     while (true) {
         InputDataSet inputDataSet(inputData, inputData);
+        TimeMeasurer timeMeasurer;
         auto stat = hftSocket.readMessage(inputDataSet, true);
+        if (bparser_log) std::cout << "Read message ellapsed microsec:\t" << timeMeasurer.elapsedMicroSec();
         if (stat == bhft::closed) return;
         for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
             uint64_t inputId = input->getId();
