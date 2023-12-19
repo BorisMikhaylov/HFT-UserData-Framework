@@ -17,6 +17,33 @@
 
 bool bparser_log = false;
 
+struct TimeMeasurer {
+    uint64_t currentTime;
+
+    TimeMeasurer() {
+        const auto p = std::chrono::system_clock::now();
+        currentTime = std::chrono::duration_cast<std::chrono::microseconds>(
+                p.time_since_epoch()).count();
+    }
+
+    void reset() {
+        const auto p = std::chrono::system_clock::now();
+        currentTime = std::chrono::duration_cast<std::chrono::microseconds>(
+                p.time_since_epoch()).count();
+    }
+
+    uint64_t elapsedMicroSec() {
+        const auto p = std::chrono::system_clock::now();
+        uint64_t newTime = std::chrono::duration_cast<std::chrono::microseconds>(
+                p.time_since_epoch()).count();
+        return newTime - currentTime;
+    }
+
+    uint64_t elapsedMilliSec() {
+        return elapsedMicroSec() / 1000;
+    }
+};
+
 class SpinLock {
     const int UNLOCKED = 0;
     const int LOCKED = 1;
@@ -39,6 +66,7 @@ public:
 
 struct Mutex {
     SpinLock &spinLock;
+    TimeMeasurer timeMeasurer;
 
     Mutex(SpinLock &spinLock) : spinLock(spinLock) {
         spinLock.lock();
@@ -46,6 +74,7 @@ struct Mutex {
 
     virtual ~Mutex() {
         spinLock.unlock();
+        std::cout << "Mutex ellapsed microsec:\t" << timeMeasurer.elapsedMicroSec() << std::endl;
     }
 };
 
@@ -533,33 +562,6 @@ struct QuoteObjectCallback : ObjectCallback {
 
 
 static char buffer[10000000];
-
-struct TimeMeasurer {
-    uint64_t currentTime;
-
-    TimeMeasurer() {
-        const auto p = std::chrono::system_clock::now();
-        currentTime = std::chrono::duration_cast<std::chrono::microseconds>(
-                p.time_since_epoch()).count();
-    }
-
-    void reset() {
-        const auto p = std::chrono::system_clock::now();
-        currentTime = std::chrono::duration_cast<std::chrono::microseconds>(
-                p.time_since_epoch()).count();
-    }
-
-    uint64_t elapsedMicroSec() {
-        const auto p = std::chrono::system_clock::now();
-        uint64_t newTime = std::chrono::duration_cast<std::chrono::microseconds>(
-                p.time_since_epoch()).count();
-        return newTime - currentTime;
-    }
-
-    uint64_t elapsedMilliSec() {
-        return elapsedMicroSec() / 1000;
-    }
-};
 
 uint64_t getDelay(bhft::WebSocket &ws) {
     const int iterations = 100;
