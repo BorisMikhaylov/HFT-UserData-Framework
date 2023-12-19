@@ -708,7 +708,8 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
         InputDataSet inputDataSet(inputData, inputData);
         TimeMeasurer timeMeasurer;
         auto stat = hftSocket.readMessage(inputDataSet, true);
-        if (bparser_log) std::cout << "Read message ellapsed microsec:\t" << timeMeasurer.elapsedMicroSec();
+        if (bparser_log)
+            std::cout << "Read message ellapsed microsec:\t" << timeMeasurer.elapsedMicroSec() << std::endl;
         if (stat == bhft::closed) return;
         for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
             uint64_t inputId = input->getId();
