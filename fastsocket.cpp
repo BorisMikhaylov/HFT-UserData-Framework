@@ -59,6 +59,8 @@ namespace bhft {
                     FD_ZERO(&rfds);
                     FD_SET(socket, &rfds);
                     select(socket + 1, &rfds, nullptr, 0, &tv);
+                } else {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
                 continue;
             } else if (cntReadBytes <= 0) {
