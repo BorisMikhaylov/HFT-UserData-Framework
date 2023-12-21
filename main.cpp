@@ -15,7 +15,7 @@
 #include <ctime>
 #include "fastsocket.h"
 
-bool bparser_log = false;
+bool logEnabled = false;
 
 struct TimeMeasurer {
     uint64_t currentTime;
@@ -74,25 +74,27 @@ struct Mutex {
 
     virtual ~Mutex() {
         spinLock.unlock();
-        if (bparser_log) std::cout << "Mutex ellapsed microsec:\t" << timeMeasurer.elapsedMicroSec() << std::endl;
+        if (logEnabled) std::cout << "Mutex ellapsed microsec:\t" << timeMeasurer.elapsedMicroSec() << std::endl;
     }
 };
 
 struct ThreadSync {
     static const int dataSize = 128;
     volatile uint64_t data[dataSize];
+    volatile int count[dataSize];
     volatile int index;
     SpinLock locker;
     volatile bhft::socket_t socket[10];
 
-    bool contains(uint64_t id) {
+    int getCount(uint64_t id) {
         for (int i = 0; i < dataSize; ++i) {
-            if (data[i] == id) return true;
+            if (data[i] == id) return count[i]++;
         }
-        return false;
+        return 0;
     }
 
     void add(uint64_t id) {
+        count[index] = 1;
         data[index++] = id;
         index %= dataSize;
     }
@@ -638,7 +640,7 @@ struct HFTSocket {
             auto stat = ws.getMessage(inMessage, returnOnNoData);
             if (stat != bhft::success) return stat;
 
-            if (bparser_log) {
+            if (logEnabled) {
                 struct timeval now;
                 uint64_t timestamp;
                 gettimeofday(&now, NULL);
@@ -673,7 +675,7 @@ struct HFTSocket {
         if (ws.sendLastOutputMessage(bhft::wsheader_type::TEXT_FRAME) == bhft::closed) {
             return bhft::closed;
         }
-        if (bparser_log) {
+        if (logEnabled) {
             std::stringstream str;
             str << id << "\tSending message:\t" << std::string(input.begin[0], input.end[0]) << std::endl;
             std::cout << str.str();
@@ -697,18 +699,22 @@ struct ReportOnExit {
     }
 };
 
-void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSocket) {
+void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine) {
     ReportOnExit reporter("Closed by server\n", id);
     HFTSocket hftSocket(id, waitOnSocket);
     threadSync.socket[threadId] = hftSocket.ws.socket.socket;
     if (hftSocket.login() == bhft::closed) return;
     if (hftSocket.subscribe(subscribeMessage) == bhft::closed) return;
     InputData inputData[10];
+    int fine = 0;
     while (true) {
+        if (fine > maxFine) {
+            return;
+        }
         InputDataSet inputDataSet(inputData, inputData);
         TimeMeasurer timeMeasurer;
         auto stat = hftSocket.readMessage(inputDataSet, true);
-        if (bparser_log) {
+        if (logEnabled) {
             auto ellapsed = timeMeasurer.elapsedMicroSec();
             if (ellapsed > 10000000) std::cout << "BIGBIGBIGBIGBIGBIG" << std::endl;
             else if (ellapsed > 10000) std::cout << "BIG" << std::endl;
@@ -718,7 +724,9 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
         for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
             uint64_t inputId = input->getId();
             Mutex mutex(threadSync.locker);
-            if (threadSync.contains(inputId)) {
+            int cnt = threadSync.getCount(inputId);
+            if (cnt > 0) {
+                fine += (1 << (cnt - 1)) - 1;
                 continue;
             }
             if (hftSocket.writeMessage(*input) == bhft::closed) {
@@ -729,11 +737,11 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
     }
 }
 
-void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket) {
+void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine) {
     int counter = (id + 1) * 10000;
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 1000));
-        process(id, counter++, subscribeMessage, waitOnSocket);
+        process(id, counter++, subscribeMessage, waitOnSocket, maxFine);
     }
 }
 
@@ -750,7 +758,7 @@ int main(int argc, char **argv) {
 
 
     uint64_t bestDelay = 10000000;
-    if (map["log"] == "true") bparser_log = true;
+    if (map["log"] == "true") logEnabled = true;
     std::string channel = (map.find("channel") != map.end()) ? map["channel"] : "orders";
     std::string instType = (map.find("instType") != map.end()) ? map["instType"] : "ANY";
     std::string instId = (map.find("instId") != map.end()) ? map["instId"] : "";
@@ -769,15 +777,13 @@ int main(int argc, char **argv) {
     for (int i = 0; i < logLevel; ++i) {
         sleep((rand() % 1000) / 100.0);
         threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket]() {
-            processLoop(i, subscribeMessage, waitOnSocket);
+            processLoop(i, subscribeMessage, waitOnSocket, i < 2 ? 1000000 : 500);
         }));
     }
-    int timeout = 60000 / logLevel / 2;
     int i = 0;
     while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(timeout + rand() % timeout));
-        bhft::socket_t socket = threadSync.socket[(i++) % (logLevel - 1)];
-        std::cout << "Closing socket:\t" << (i % logLevel) << "\t" << socket << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20000 + rand() % 10000));
+        bhft::socket_t socket = threadSync.socket[(i++) % 2];
         closesocket(socket);
     }
     for (int i = 0; i < logLevel; ++i) {
