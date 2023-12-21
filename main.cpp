@@ -766,6 +766,7 @@ int main(int argc, char **argv) {
     int loginUpperBound = (map.find("loginLimit") == map.end()) ? 20000 : stoi(map["loginLimit"]);
     int logLevel = (map.find("logLevel") == map.end()) ? 1 : stoi(map["logLevel"]);
     bool waitOnSocket = map["wait"] == "true";
+    int fine = (map.find("fine") == map.end()) ? 500 : stoi(map["fine"]);
 
     std::string subscribeMessage =
             R"({"op":"subscribe","args":[{"channel":")" + channel + R"(","instType":")" + instType + R"(")" +
@@ -776,8 +777,8 @@ int main(int argc, char **argv) {
     std::vector<std::thread> threads;
     for (int i = 0; i < logLevel; ++i) {
         sleep((rand() % 1000) / 100.0);
-        threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket]() {
-            processLoop(i, subscribeMessage, waitOnSocket, i < 2 ? 1000000 : 500);
+        threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket, fine]() {
+            processLoop(i, subscribeMessage, waitOnSocket, i < 2 ? 1000000 : fine);
         }));
     }
     int i = 0;
