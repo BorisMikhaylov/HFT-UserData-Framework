@@ -740,7 +740,7 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
 void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine) {
     int counter = (id + 1) * 10000;
     while (true) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000 + rand() % 1000));
         process(id, counter++, subscribeMessage, waitOnSocket, maxFine);
     }
 }
