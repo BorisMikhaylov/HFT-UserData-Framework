@@ -699,7 +699,7 @@ struct ReportOnExit {
     }
 };
 
-void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine) {
+void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine, int skipFine) {
     ReportOnExit reporter("Closed by server\n", id);
     HFTSocket hftSocket(id, waitOnSocket);
     threadSync.socket[threadId] = hftSocket.ws.socket.socket;
@@ -707,7 +707,12 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
     if (hftSocket.subscribe(subscribeMessage) == bhft::closed) return;
     InputData inputData[10];
     int fine = 0;
+    int iter = 0;
+    if (skipFine > 0) {
+        skipFine += rand() % skipFine;
+    }
     while (true) {
+        ++iter;
         if (fine > maxFine) {
             return;
         }
@@ -726,7 +731,9 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
             Mutex mutex(threadSync.locker);
             int cnt = threadSync.getCount(inputId);
             if (cnt > 0) {
-                fine += (1 << (cnt - 1)) - 1;
+                if (iter > skipFine) {
+                    fine += (1 << (cnt - 1)) - 1;
+                }
                 continue;
             }
             if (hftSocket.writeMessage(*input) == bhft::closed) {
@@ -737,11 +744,11 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
     }
 }
 
-void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine) {
+void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine, int skipFine) {
     int counter = (id + 1) * 10000;
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000 + rand() % 1000));
-        process(id, counter++, subscribeMessage, waitOnSocket, maxFine);
+        process(id, counter++, subscribeMessage, waitOnSocket, maxFine, skipFine);
     }
 }
 
@@ -765,6 +772,7 @@ int main(int argc, char **argv) {
     std::string instIdStr = (instId.empty()) ? "" : R"(,"instId":")" + instId + R"(")";
     int loginUpperBound = (map.find("loginLimit") == map.end()) ? 20000 : stoi(map["loginLimit"]);
     int logLevel = (map.find("logLevel") == map.end()) ? 1 : stoi(map["logLevel"]);
+    int skipFine = (map.find("skip") == map.end()) ? 0 : stoi(map["skip"]);
     bool waitOnSocket = map["wait"] == "true";
     int fine = (map.find("fine") == map.end()) ? 500 : stoi(map["fine"]);
 
@@ -777,8 +785,8 @@ int main(int argc, char **argv) {
     std::vector<std::thread> threads;
     for (int i = 0; i < logLevel; ++i) {
         sleep((rand() % 1000) / 100.0);
-        threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket, fine]() {
-            processLoop(i, subscribeMessage, waitOnSocket, i < 2 ? 1000000 : fine);
+        threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket, fine, skipFine]() {
+            processLoop(i, subscribeMessage, waitOnSocket, i < 2 ? 1000000 : fine, skipFine);
         }));
     }
     int i = 0;
