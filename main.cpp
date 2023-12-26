@@ -103,8 +103,8 @@ struct ThreadSync {
 ThreadSync threadSync;
 
 struct InputData {
-    const char *begin[6];
-    const char *end[6];
+    const char *begin[7];
+    const char *end[7];
     int mask;
 
     void reset() {
@@ -454,7 +454,8 @@ static const char *dataObjectId[] = {"ordId",
                                      "px",
                                      "sz",
                                      "state",
-                                     "uTime"};
+                                     "uTime",
+                                     "instId"};
 static const char *outputObjectId[] = {"\"orderId\"",
                                        "\"side\"",
                                        "\"price\"",
@@ -462,7 +463,7 @@ static const char *outputObjectId[] = {"\"orderId\"",
                                        "\"state\"",
                                        "\"uTime\""};
 
-static state *dataObjectIdMap = buildStateMachine(dataObjectId, 6);
+static state *dataObjectIdMap = buildStateMachine(dataObjectId, 7);
 
 struct DataObjectCallback : ObjectCallback {
     bhft::WebSocket *ws;
@@ -699,7 +700,8 @@ struct ReportOnExit {
     }
 };
 
-void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine, int skipFine) {
+void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine, int skipFine,
+             const std::string &filterInstId) {
     ReportOnExit reporter("Closed by server\n", id);
     HFTSocket hftSocket(id, waitOnSocket);
     threadSync.socket[threadId] = hftSocket.ws.socket.socket;
@@ -728,6 +730,16 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
         if (stat == bhft::closed) return;
         for (auto input = inputDataSet.begin; input != inputDataSet.end; ++input) {
             uint64_t inputId = input->getId();
+            if (!filterInstId.empty() && input->mask & 64 && filterInstId.size() == input->end[6] - input->begin[6]) {
+                const char *s = filterInstId.c_str();
+                bool same = true;
+                for (const char *c = input->begin[6]; c != input->end[6]; ++c, ++s) {
+                    if (*c != *s) {
+                        same = false;
+                    }
+                }
+                if (!same) continue;
+            }
             Mutex mutex(threadSync.locker);
             int cnt = threadSync.getCount(inputId);
             if (cnt > 0) {
@@ -744,11 +756,12 @@ void process(int threadId, int id, std::string &subscribeMessage, bool waitOnSoc
     }
 }
 
-void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine, int skipFine) {
+void processLoop(int id, std::string &subscribeMessage, bool waitOnSocket, int maxFine, int skipFine,
+                 const std::string &filterInstId) {
     int counter = (id + 1) * 10000;
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1000 + rand() % 1000));
-        process(id, counter++, subscribeMessage, waitOnSocket, maxFine, skipFine);
+        process(id, counter++, subscribeMessage, waitOnSocket, maxFine, skipFine, filterInstId);
     }
 }
 
@@ -769,6 +782,7 @@ int main(int argc, char **argv) {
     std::string channel = (map.find("channel") != map.end()) ? map["channel"] : "orders";
     std::string instType = (map.find("instType") != map.end()) ? map["instType"] : "ANY";
     std::string instId = (map.find("instId") != map.end()) ? map["instId"] : "";
+    std::string filterInstId = (map.find("filterInstId") != map.end()) ? map["filterInstId"] : "";
     std::string instIdStr = (instId.empty()) ? "" : R"(,"instId":")" + instId + R"(")";
     int loginUpperBound = (map.find("loginLimit") == map.end()) ? 20000 : stoi(map["loginLimit"]);
     int logLevel = (map.find("logLevel") == map.end()) ? 1 : stoi(map["logLevel"]);
