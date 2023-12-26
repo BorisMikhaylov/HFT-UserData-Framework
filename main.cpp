@@ -798,10 +798,10 @@ int main(int argc, char **argv) {
 
     std::vector<std::thread> threads;
     for (int i = 0; i < logLevel; ++i) {
-        sleep((rand() % 1000) / 100.0);
         threads.push_back(std::thread([&subscribeMessage, i, waitOnSocket, fine, skipFine, &filterInstId]() {
             processLoop(i, subscribeMessage, waitOnSocket, i < 2 ? 1000000 : fine, skipFine, filterInstId);
         }));
+        sleep((rand() % 1000) / 100.0);
     }
     int i = 0;
     while (true) {
